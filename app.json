@@ -26,7 +26,12 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "edgeToEdgeEnabled": false
+      "edgeToEdgeEnabled": false,
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyA4sviRXifmyohUljsVuorJsnQcaNyHcOc"
+        }
+      }
     },
     "web": {
       "output": "static",
@@ -50,6 +55,12 @@
         "expo-location",
         {
           "locationAlwaysAndWhenInUsePermission": "Allow Suvega to use your location."
+        }
+      ],
+      [
+        "react-native-maps",
+        {
+          "androidApiKey": "AIzaSyA4sviRXifmyohUljsVuorJsnQcaNyHcOc"
         }
       ]
     ],
