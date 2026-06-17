@@ -56,12 +56,6 @@
         {
           "locationAlwaysAndWhenInUsePermission": "Allow Suvega to use your location."
         }
-      ],
-      [
-        "react-native-maps",
-        {
-          "androidApiKey": "AIzaSyA4sviRXifmyohUljsVuorJsnQcaNyHcOc"
-        }
       ]
     ],
     "experiments": {
