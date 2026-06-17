@@ -12,10 +12,11 @@ import * as Location from 'expo-location';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import {
   fetchTrafficSignals,
   findNearestSignalOnRoute,
-  getSpeedAdvisory,
+  computeSpeedAdvisory,
   TrafficSignal,
   SpeedAdvisory,
 } from '../services/trafficSignals';
@@ -98,227 +99,6 @@ async function fetchRoute(
 }
 
 // ---------------------------------------------------------------------------
-// Speedometer Component
-// ---------------------------------------------------------------------------
-function Speedometer({ speed }: { speed: number }) {
-  return (
-    <View style={speedoStyles.container}>
-      <View style={speedoStyles.ring}>
-        <Text style={speedoStyles.value}>{Math.round(speed)}</Text>
-        <Text style={speedoStyles.unit}>km/h</Text>
-      </View>
-      <Text style={speedoStyles.label}>Current Speed</Text>
-    </View>
-  );
-}
-
-const speedoStyles = StyleSheet.create({
-  container: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  ring: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    borderWidth: 3,
-    borderColor: 'rgba(255,255,255,0.25)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.06)',
-  },
-  value: {
-    color: '#fff',
-    fontSize: 24,
-    fontWeight: '700',
-  },
-  unit: {
-    color: '#999',
-    fontSize: 10,
-    fontWeight: '500',
-    marginTop: -2,
-  },
-  label: {
-    color: '#888',
-    fontSize: 11,
-    marginTop: 6,
-    fontWeight: '500',
-  },
-});
-
-// ---------------------------------------------------------------------------
-// Speed Range Bar Component
-// ---------------------------------------------------------------------------
-function SpeedRangeBar({
-  minSpeed,
-  maxSpeed,
-  currentSpeed,
-}: {
-  minSpeed: number;
-  maxSpeed: number;
-  currentSpeed: number;
-}) {
-  // Calculate position of current speed on the bar (0 to 1)
-  const range = maxSpeed - minSpeed;
-  const clampedSpeed = Math.max(minSpeed - 10, Math.min(maxSpeed + 10, currentSpeed));
-  const barMin = minSpeed - 10;
-  const barMax = maxSpeed + 10;
-  const barRange = barMax - barMin;
-  const position = barRange > 0 ? ((clampedSpeed - barMin) / barRange) * 100 : 50;
-
-  const isInRange = currentSpeed >= minSpeed && currentSpeed <= maxSpeed;
-
-  return (
-    <View style={rangeStyles.container}>
-      <View style={rangeStyles.labelsRow}>
-        <Text style={rangeStyles.speedLabel}>{Math.round(minSpeed)} km/h</Text>
-        <Text style={[rangeStyles.rangeTitle, isInRange && rangeStyles.rangeTitleGreen]}>
-          Speed Range
-        </Text>
-        <Text style={rangeStyles.speedLabel}>{Math.round(maxSpeed)} km/h</Text>
-      </View>
-      <View style={rangeStyles.barTrack}>
-        {/* Green zone */}
-        <View
-          style={[
-            rangeStyles.greenZone,
-            {
-              left: `${((minSpeed - barMin) / barRange) * 100}%`,
-              width: `${(range / barRange) * 100}%`,
-            },
-          ]}
-        />
-        {/* Current speed indicator */}
-        <View
-          style={[
-            rangeStyles.indicator,
-            {
-              left: `${position}%`,
-              backgroundColor: isInRange ? '#00E676' : '#FF5252',
-            },
-          ]}
-        />
-      </View>
-    </View>
-  );
-}
-
-const rangeStyles = StyleSheet.create({
-  container: {
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-  },
-  labelsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  speedLabel: {
-    color: '#ccc',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  rangeTitle: {
-    color: '#888',
-    fontSize: 11,
-    fontWeight: '500',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  rangeTitleGreen: {
-    color: '#00E676',
-  },
-  barTrack: {
-    height: 6,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 3,
-    position: 'relative',
-    overflow: 'visible',
-  },
-  greenZone: {
-    position: 'absolute',
-    top: 0,
-    height: 6,
-    backgroundColor: 'rgba(0,230,118,0.35)',
-    borderRadius: 3,
-  },
-  indicator: {
-    position: 'absolute',
-    top: -5,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    marginLeft: -8,
-    borderWidth: 2,
-    borderColor: '#fff',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 3,
-  },
-});
-
-// ---------------------------------------------------------------------------
-// Signal State Indicator
-// ---------------------------------------------------------------------------
-function SignalIndicator({
-  state,
-  remaining,
-  signalName,
-  distanceM,
-}: {
-  state: string;
-  remaining: number;
-  signalName: string;
-  distanceM: number;
-}) {
-  const color =
-    state === 'green' ? '#00E676' : state === 'yellow' ? '#FFD600' : '#FF5252';
-
-  return (
-    <View style={sigStyles.container}>
-      <View style={[sigStyles.dot, { backgroundColor: color }]} />
-      <View style={sigStyles.info}>
-        <Text style={sigStyles.name} numberOfLines={1}>{signalName}</Text>
-        <Text style={sigStyles.detail}>
-          {state.charAt(0).toUpperCase() + state.slice(1)} · {Math.round(remaining)}s · {Math.round(distanceM)}m away
-        </Text>
-      </View>
-    </View>
-  );
-}
-
-const sigStyles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-  },
-  dot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: 10,
-  },
-  info: {
-    flex: 1,
-  },
-  name: {
-    color: '#ddd',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  detail: {
-    color: '#888',
-    fontSize: 11,
-    marginTop: 1,
-  },
-});
-
-// ---------------------------------------------------------------------------
 // NavigationScreen Component
 // ---------------------------------------------------------------------------
 export default function NavigationScreen() {
@@ -338,8 +118,19 @@ export default function NavigationScreen() {
   // User location
   const [userLat, setUserLat] = useState(0);
   const [userLng, setUserLng] = useState(0);
-  const [userSpeed, setUserSpeed] = useState(0); // m/s from GPS
+  const [userSpeed, setUserSpeed] = useState(0); // m/s — smoothed
   const [hasLocation, setHasLocation] = useState(false);
+
+  // Speed smoothing: 3-reading moving average buffer
+  const speedBufferRef = useRef<number[]>([]);
+  const SPEED_BUFFER_SIZE = 3;
+
+  // Fallback speed: track last valid position + timestamp
+  const lastValidPosRef = useRef<{
+    lat: number;
+    lng: number;
+    time: number;
+  } | null>(null);
 
   // Route
   const [fullRoute, setFullRoute] = useState<
@@ -401,6 +192,29 @@ export default function NavigationScreen() {
     [destLat, destLng],
   );
 
+  // --- Helper: compute smoothed speed from buffer ---
+  const pushSpeedAndSmooth = useCallback((rawSpeedMs: number) => {
+    const buf = speedBufferRef.current;
+    buf.push(rawSpeedMs);
+    if (buf.length > SPEED_BUFFER_SIZE) buf.shift();
+    // Average of all readings in the buffer
+    const avg = buf.reduce((sum, v) => sum + v, 0) / buf.length;
+    setUserSpeed(avg);
+  }, []);
+
+  // --- Helper: compute fallback speed from position delta ---
+  const computeFallbackSpeed = useCallback(
+    (lat: number, lng: number, timestamp: number): number | null => {
+      const prev = lastValidPosRef.current;
+      if (!prev) return null;
+      const dtSec = (timestamp - prev.time) / 1000;
+      if (dtSec <= 0 || dtSec > 10) return null; // ignore stale gaps
+      const distM = haversineM(prev.lat, prev.lng, lat, lng);
+      return distM / dtSec; // m/s
+    },
+    [],
+  );
+
   // --- Get user location & start watching ---
   useEffect(() => {
     let sub: Location.LocationSubscription | null = null;
@@ -413,31 +227,57 @@ export default function NavigationScreen() {
         return;
       }
 
-      // Get initial location
+      // Get initial location with best accuracy for navigation
       const loc = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
+        accuracy: Location.Accuracy.BestForNavigation,
       });
-      const { latitude, longitude, speed } = loc.coords;
+      const { latitude, longitude, speed, accuracy: acc } = loc.coords;
       setUserLat(latitude);
       setUserLng(longitude);
-      setUserSpeed(speed ?? 0);
+      pushSpeedAndSmooth(Math.max(0, speed ?? 0));
       setHasLocation(true);
+      lastValidPosRef.current = { lat: latitude, lng: longitude, time: loc.timestamp };
 
       // Fetch initial route
       await loadRoute(latitude, longitude);
 
-      // Watch position for live updates
+      // Watch position for live updates — optimized for vehicle navigation
       sub = await Location.watchPositionAsync(
         {
-          accuracy: Location.Accuracy.High,
-          distanceInterval: 3, // update every 3m moved
-          timeInterval: 2000, // or every 2s
+          accuracy: Location.Accuracy.BestForNavigation,
+          distanceInterval: 1,    // trigger on 1m movement
+          timeInterval: 500,       // poll every 500ms (4 readings/sec)
         },
         (newLoc) => {
-          const { latitude: lat, longitude: lng, speed: spd } = newLoc.coords;
+          const {
+            latitude: lat,
+            longitude: lng,
+            speed: spd,
+            accuracy: locAccuracy,
+          } = newLoc.coords;
+
+          // --- Accuracy filter: discard readings with >20m uncertainty ---
+          // These are tower-based or poor satellite fixes that cause position jumps.
+          if (locAccuracy !== null && locAccuracy > 20) return;
+
           setUserLat(lat);
           setUserLng(lng);
-          setUserSpeed(spd ?? 0);
+
+          // --- Speed: prefer GPS speed, fall back to position delta ---
+          let speedMs: number;
+          if (spd !== null && spd >= 0) {
+            speedMs = spd;
+          } else {
+            // GPS speed unavailable — compute from position change
+            const fallback = computeFallbackSpeed(lat, lng, newLoc.timestamp);
+            speedMs = fallback !== null ? Math.max(0, fallback) : 0;
+          }
+
+          // Push into smoothing buffer (3-reading moving average)
+          pushSpeedAndSmooth(speedMs);
+
+          // Update last valid position for future fallback
+          lastValidPosRef.current = { lat, lng, time: newLoc.timestamp };
         },
       );
       locationSubRef.current = sub;
@@ -446,7 +286,7 @@ export default function NavigationScreen() {
     return () => {
       sub?.remove();
     };
-  }, [loadRoute]);
+  }, [loadRoute, pushSpeedAndSmooth, computeFallbackSpeed]);
 
   // --- Find nearest signal and get advisory ---
   useEffect(() => {
@@ -461,28 +301,26 @@ export default function NavigationScreen() {
     setNearestSignal(nearest);
   }, [userLat, userLng, hasLocation, signals, fullRoute]);
 
-  // --- Poll speed advisory ---
+  // --- Poll speed advisory (computed on-device, no server needed) ---
   useEffect(() => {
     if (!nearestSignal || !hasLocation) return;
 
-    const fetchAdvisory = async () => {
+    const updateAdvisory = () => {
       const speedKmh = Math.max(0, (userSpeed ?? 0)) * 3.6; // m/s to km/h
-      const result = await getSpeedAdvisory(
+      const result = computeSpeedAdvisory(
         userLat,
         userLng,
         speedKmh,
         nearestSignal.signal,
       );
-      if (result) {
-        setAdvisory(result);
-      }
+      setAdvisory(result);
     };
 
-    // Fetch immediately
-    fetchAdvisory();
+    // Compute immediately
+    updateAdvisory();
 
-    // Then poll
-    advisoryIntervalRef.current = setInterval(fetchAdvisory, ADVISORY_INTERVAL_MS);
+    // Then update every 2 seconds (signal state changes over time)
+    advisoryIntervalRef.current = setInterval(updateAdvisory, ADVISORY_INTERVAL_MS);
 
     return () => {
       if (advisoryIntervalRef.current) {
@@ -560,69 +398,118 @@ export default function NavigationScreen() {
   const midLat = hasLocation ? (userLat + destLat) / 2 : destLat;
   const midLng = hasLocation ? (userLng + destLng) / 2 : destLng;
   const userSpeedKmh = Math.max(0, (userSpeed ?? 0)) * 3.6;
+  const roundedSpeed = Math.round(userSpeedKmh);
 
-  // Status message styling
-  const getStatusStyle = () => {
-    if (!advisory) return { color: '#888' };
+  // --- Status message & icon logic ---
+  const getStatusInfo = () => {
+    if (!advisory) {
+      if (signalLoading) {
+        return { message: 'CONNECTING TO SIGNALS...', icon: 'wifi' as const, color: '#B0BEC5' };
+      }
+      if (roundedSpeed === 0) {
+        return { message: 'READY TO RIDE!', icon: 'two-wheeler' as const, color: '#B0BEC5' };
+      }
+      return { message: 'NO SIGNALS NEARBY', icon: 'explore' as const, color: '#B0BEC5' };
+    }
     switch (advisory.status) {
       case 'perfect':
-        return { color: '#00E676' };
+        return { message: 'PERFECT – YOU WILL HIT GREEN!', icon: 'check-box' as const, color: '#66BB6A' };
       case 'too_fast':
-        return { color: '#FF5252' };
+        return { message: 'SLOW DOWN A BIT', icon: 'speed' as const, color: '#EF5350' };
       case 'too_slow':
-        return { color: '#FFD600' };
+        return { message: 'SPEED UP A LITTLE', icon: 'trending-up' as const, color: '#FFC107' };
+      case 'at_signal':
+        return { message: 'YOU ARE AT THE SIGNAL', icon: 'traffic' as const, color: '#B0BEC5' };
       default:
-        return { color: '#888' };
+        return { message: 'NAVIGATING...', icon: 'navigation' as const, color: '#B0BEC5' };
     }
   };
 
+  const statusInfo = getStatusInfo();
+
+  // Speed text for bottom bar
+  const speedDisplayText = roundedSpeed > 0
+    ? `Your speed: ${roundedSpeed} km/h`
+    : 'Waiting for movement...';
+
+  // Speedometer ring color based on status
+  const speedoRingColor = !advisory
+    ? '#5C9CE6'
+    : advisory.status === 'perfect'
+    ? '#66BB6A'
+    : advisory.status === 'too_fast'
+    ? '#EF5350'
+    : advisory.status === 'too_slow'
+    ? '#FFC107'
+    : '#5C9CE6';
+
   return (
     <View style={styles.root}>
-      <StatusBar translucent backgroundColor="transparent" barStyle="dark-content" />
+      <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
 
-      {/* ===== TOP SECTION (18%) — Speed Advisory ===== */}
-      <View style={styles.topSection}>
+      {/* ===== TOP BAR — Gradient with Speed Range ===== */}
+      <LinearGradient
+        colors={['#7B6BA5', '#6E8CC2', '#7BA3C9']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.topBar, { paddingTop: insets.top + 4 }]}
+      >
         {/* Back button */}
         <TouchableOpacity
-          style={[styles.backBtn, { marginTop: insets.top + 8 }]}
+          style={styles.backBtn}
           onPress={() => router.back()}
           activeOpacity={0.7}
         >
-          <MaterialIcons name="arrow-back" size={24} color="#fff" />
+          <MaterialIcons name="arrow-back" size={26} color="#fff" />
         </TouchableOpacity>
 
-        {/* Speed range display */}
-        <View style={[styles.topContent, { marginTop: insets.top + 4 }]}>
-          {advisory && nearestSignal ? (
-            <>
-              <SignalIndicator
-                state={advisory.signal_state}
-                remaining={advisory.signal_remaining}
-                signalName={nearestSignal.signal.name}
-                distanceM={advisory.distance_m}
-              />
-              <SpeedRangeBar
-                minSpeed={advisory.min_speed}
-                maxSpeed={advisory.max_speed}
-                currentSpeed={userSpeedKmh}
-              />
-            </>
-          ) : signalLoading ? (
-            <View style={styles.loadingRow}>
-              <ActivityIndicator size="small" color="#00E676" />
-              <Text style={styles.loadingSmallText}>Loading signals...</Text>
+        {/* Speed range: MIN --- km/h --- MAX */}
+        {advisory && nearestSignal ? (
+          <View style={styles.speedRangeRow}>
+            <View style={styles.speedBlock}>
+              <Text style={styles.speedValue}>{Math.round(advisory.min_speed)}</Text>
+              <Text style={styles.speedLabel}>MIN</Text>
             </View>
-          ) : (
-            <View style={styles.loadingRow}>
-              <MaterialIcons name="traffic" size={18} color="#666" />
-              <Text style={styles.loadingSmallText}>No signals nearby</Text>
+            <View style={styles.rangeCenter}>
+              <View style={styles.rangeLine} />
+              <Text style={styles.rangeUnit}>km/h</Text>
+              <View style={styles.rangeLine} />
             </View>
-          )}
-        </View>
-      </View>
+            <View style={styles.speedBlock}>
+              <Text style={styles.speedValue}>{Math.round(advisory.max_speed)}</Text>
+              <Text style={styles.speedLabel}>MAX</Text>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.speedRangeRow}>
+            {signalLoading ? (
+              <View style={styles.topLoadingRow}>
+                <ActivityIndicator size="small" color="#fff" />
+                <Text style={styles.topLoadingText}>Finding signals...</Text>
+              </View>
+            ) : (
+              <View style={styles.noSignalRow}>
+                <View style={styles.speedBlock}>
+                  <Text style={styles.speedValueDim}>--</Text>
+                  <Text style={styles.speedLabel}>MIN</Text>
+                </View>
+                <View style={styles.rangeCenter}>
+                  <View style={styles.rangeLine} />
+                  <Text style={styles.rangeUnit}>km/h</Text>
+                  <View style={styles.rangeLine} />
+                </View>
+                <View style={styles.speedBlock}>
+                  <Text style={styles.speedValueDim}>--</Text>
+                  <Text style={styles.speedLabel}>MAX</Text>
+                </View>
+              </View>
+            )}
+          </View>
+        )}
+      </LinearGradient>
 
-      {/* ===== MIDDLE SECTION (60%) — MAP ===== */}
-      <View style={styles.middleSection}>
+      {/* ===== MIDDLE — MAP ===== */}
+      <View style={styles.mapSection}>
         <MapView
           ref={mapRef}
           style={styles.map}
@@ -640,8 +527,8 @@ export default function NavigationScreen() {
           rotateEnabled={true}
           pitchEnabled={true}
           loadingEnabled={true}
-          loadingIndicatorColor="#00E676"
-          loadingBackgroundColor="#0B0B0B"
+          loadingIndicatorColor="#7B6BA5"
+          loadingBackgroundColor="#f5f5f5"
         >
           {/* Destination marker */}
           <Marker
@@ -682,7 +569,7 @@ export default function NavigationScreen() {
         {/* Loading overlay */}
         {loading && (
           <View style={styles.loadingOverlay}>
-            <ActivityIndicator size="large" color="#00E676" />
+            <ActivityIndicator size="large" color="#7B6BA5" />
             <Text style={styles.loadingText}>Finding best route...</Text>
           </View>
         )}
@@ -690,7 +577,7 @@ export default function NavigationScreen() {
         {/* Error overlay */}
         {routeError && !loading && (
           <View style={styles.loadingOverlay}>
-            <MaterialIcons name="error-outline" size={40} color="#FF5252" />
+            <MaterialIcons name="error-outline" size={40} color="#EF5350" />
             <Text style={styles.errorText}>Could not find route</Text>
             <TouchableOpacity
               style={styles.retryBtn}
@@ -701,20 +588,20 @@ export default function NavigationScreen() {
           </View>
         )}
 
-        {/* Map Controls — positioned inside middle section */}
+        {/* Map Controls */}
         <View style={styles.mapControls}>
           <TouchableOpacity style={styles.ctrlBtn} onPress={fitRoute} activeOpacity={0.7}>
-            <MaterialIcons name="zoom-out-map" size={22} color="#fff" />
+            <MaterialIcons name="zoom-out-map" size={22} color="#555" />
           </TouchableOpacity>
           <TouchableOpacity style={styles.ctrlBtn} onPress={goToMe} activeOpacity={0.7}>
-            <MaterialIcons name="my-location" size={22} color="#fff" />
+            <MaterialIcons name="my-location" size={22} color="#555" />
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.ctrlBtn}
             onPress={() => setShowTypePicker((v) => !v)}
             activeOpacity={0.7}
           >
-            <MaterialIcons name="layers" size={22} color="#fff" />
+            <MaterialIcons name="layers" size={22} color="#555" />
           </TouchableOpacity>
         </View>
 
@@ -736,52 +623,35 @@ export default function NavigationScreen() {
         )}
       </View>
 
-      {/* ===== BOTTOM SECTION (22%) — Speedometer & Status ===== */}
-      <View style={styles.bottomSection}>
-        <View style={styles.bottomContent}>
-          {/* Speedometer */}
-          <Speedometer speed={userSpeedKmh} />
+      {/* ===== BOTTOM BAR — Gradient with Speedometer & Status ===== */}
+      <LinearGradient
+        colors={['#6B83D6', '#8B6FC0']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 12) }]}
+      >
+        {/* Speedometer circle */}
+        <View style={styles.speedoArea}>
+          <View style={[styles.speedoRing, { borderColor: speedoRingColor }]}>
+            <Text style={styles.speedoValue}>
+              {roundedSpeed}
+            </Text>
+            <Text style={styles.speedoUnit}>km/h</Text>
+          </View>
+          <Text style={styles.speedoLabel}>Current Speed</Text>
+        </View>
 
-          {/* Status message */}
-          <View style={styles.statusContainer}>
-            {advisory ? (
-              <>
-                <Text style={[styles.statusMessage, getStatusStyle()]}>
-                  {advisory.message}
-                </Text>
-                {advisory.status === 'perfect' && (
-                  <MaterialIcons
-                    name="check-circle"
-                    size={20}
-                    color="#00E676"
-                    style={{ marginTop: 4 }}
-                  />
-                )}
-                {advisory.status === 'too_fast' && (
-                  <MaterialIcons
-                    name="speed"
-                    size={20}
-                    color="#FF5252"
-                    style={{ marginTop: 4 }}
-                  />
-                )}
-                {advisory.status === 'too_slow' && (
-                  <MaterialIcons
-                    name="trending-up"
-                    size={20}
-                    color="#FFD600"
-                    style={{ marginTop: 4 }}
-                  />
-                )}
-              </>
-            ) : (
-              <Text style={styles.statusPlaceholder}>
-                {signalLoading ? 'Connecting...' : 'No signal data'}
-              </Text>
-            )}
+        {/* Status area */}
+        <View style={styles.statusArea}>
+          <Text style={styles.statusSpeedText}>{speedDisplayText}</Text>
+          <View style={styles.statusRow}>
+            <View style={[styles.statusIcon, { backgroundColor: statusInfo.color }]}>
+              <MaterialIcons name={statusInfo.icon} size={16} color="#fff" />
+            </View>
+            <Text style={styles.statusMessage}>{statusInfo.message}</Text>
           </View>
         </View>
-      </View>
+      </LinearGradient>
     </View>
   );
 }
@@ -790,110 +660,124 @@ export default function NavigationScreen() {
 // Styles
 // ---------------------------------------------------------------------------
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#0B0B0B' },
+  root: { flex: 1, backgroundColor: '#f0f0f0' },
 
-  /* Sections */
-  topSection: {
-    flex: 18, // 18%
-    backgroundColor: '#111113',
-    justifyContent: 'flex-start',
-  },
-  middleSection: {
-    flex: 60, // 60%
-    backgroundColor: '#0B0B0B',
-    overflow: 'hidden',
-    borderRadius: 0,
-  },
-  bottomSection: {
-    flex: 22, // 22%
-    backgroundColor: '#111113',
-    justifyContent: 'center',
-  },
-
-  map: { flex: 1 },
-
-  /* Back button */
-  backBtn: {
-    position: 'absolute',
-    left: 16,
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: 'rgba(32,32,36,0.9)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 4,
-    zIndex: 10,
-  },
-
-  /* Top section content */
-  topContent: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingLeft: 60, // space for back button
-  },
-  loadingRow: {
+  /* ===== TOP BAR ===== */
+  topBar: {
+    paddingBottom: 14,
+    paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+  },
+  backBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  speedRangeRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  speedBlock: {
+    alignItems: 'center',
+    minWidth: 48,
+  },
+  speedValue: {
+    color: '#fff',
+    fontSize: 30,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
+  speedValueDim: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 30,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
+  speedLabel: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 1,
+    marginTop: 2,
+  },
+  rangeCenter: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+  },
+  rangeLine: {
+    flex: 1,
+    height: 2,
+    backgroundColor: 'rgba(255,255,255,0.35)',
+    borderRadius: 1,
+  },
+  rangeUnit: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 13,
+    fontWeight: '600',
+    marginHorizontal: 10,
+  },
+  topLoadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: 10,
   },
-  loadingSmallText: {
-    color: '#888',
-    fontSize: 13,
+  topLoadingText: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 14,
+    fontWeight: '500',
   },
-
-  /* Bottom section content */
-  bottomContent: {
+  noSignalRow: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 24,
-    gap: 24,
-  },
-  statusContainer: {
-    flex: 1,
-    alignItems: 'center',
     justifyContent: 'center',
   },
-  statusMessage: {
-    fontSize: 16,
-    fontWeight: '700',
-    textAlign: 'center',
+
+  /* ===== MAP SECTION ===== */
+  mapSection: {
+    flex: 1,
+    overflow: 'hidden',
   },
-  statusPlaceholder: {
-    color: '#666',
-    fontSize: 14,
-  },
+  map: { flex: 1 },
 
   /* Loading / Error overlays */
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(11,11,11,0.75)',
+    backgroundColor: 'rgba(245,245,245,0.85)',
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 20,
   },
   loadingText: {
-    color: '#aaa',
+    color: '#666',
     fontSize: 14,
     marginTop: 12,
   },
   errorText: {
-    color: '#FF5252',
+    color: '#EF5350',
     fontSize: 15,
     marginTop: 10,
     fontWeight: '600',
   },
   retryBtn: {
     marginTop: 16,
-    paddingHorizontal: 24,
+    paddingHorizontal: 28,
     paddingVertical: 10,
-    backgroundColor: '#00E676',
-    borderRadius: 20,
+    backgroundColor: '#7B6BA5',
+    borderRadius: 22,
   },
   retryText: {
-    color: '#000',
+    color: '#fff',
     fontWeight: '700',
     fontSize: 14,
   },
@@ -902,41 +786,114 @@ const styles = StyleSheet.create({
   mapControls: {
     position: 'absolute',
     right: 12,
-    bottom: 12,
+    bottom: 16,
     gap: 10,
     zIndex: 10,
   },
   ctrlBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: 'rgba(32,32,36,0.9)',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.92)',
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.35,
+    shadowOpacity: 0.15,
     shadowRadius: 4,
   },
 
   /* Type picker */
   typePicker: {
     position: 'absolute',
-    right: 62,
-    bottom: 12,
-    backgroundColor: 'rgba(28,28,32,0.96)',
+    right: 64,
+    bottom: 16,
+    backgroundColor: 'rgba(255,255,255,0.96)',
     borderRadius: 14,
     paddingVertical: 4,
     elevation: 8,
     zIndex: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.5,
+    shadowOpacity: 0.15,
     shadowRadius: 10,
   },
   typeOpt: { paddingHorizontal: 20, paddingVertical: 11 },
-  typeOptActive: { backgroundColor: 'rgba(0,230,118,0.12)' },
-  typeLabel: { color: '#999', fontSize: 14 },
-  typeLabelActive: { color: '#00E676', fontWeight: '600' },
+  typeOptActive: { backgroundColor: 'rgba(123,107,165,0.12)' },
+  typeLabel: { color: '#888', fontSize: 14 },
+  typeLabelActive: { color: '#7B6BA5', fontWeight: '600' },
+
+  /* ===== BOTTOM BAR ===== */
+  bottomBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: 14,
+    paddingHorizontal: 20,
+  },
+
+  /* Speedometer */
+  speedoArea: {
+    alignItems: 'center',
+    marginRight: 20,
+  },
+  speedoRing: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.12)',
+  },
+  speedoValue: {
+    color: '#fff',
+    fontSize: 28,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
+  speedoUnit: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: -2,
+  },
+  speedoLabel: {
+    color: 'rgba(255,255,255,0.65)',
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 6,
+    letterSpacing: 0.3,
+  },
+
+  /* Status */
+  statusArea: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  statusSpeedText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statusIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  statusMessage: {
+    color: 'rgba(255,255,255,0.92)',
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    flex: 1,
+  },
 });

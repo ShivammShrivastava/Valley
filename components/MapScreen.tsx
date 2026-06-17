@@ -98,13 +98,19 @@ export default function MapScreen() {
     }
   }, []);
 
-  // --- Location ---
+  // --- GPS warm-up: start tracking early so satellite lock is ready before navigation ---
+  const gpsWarmupRef = useRef<Location.LocationSubscription | null>(null);
+
   useEffect(() => {
+    let sub: Location.LocationSubscription | null = null;
+
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') return;
+
+      // Get initial position with best accuracy
       const loc = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
+        accuracy: Location.Accuracy.BestForNavigation,
       });
       const { latitude, longitude } = loc.coords;
       setUserLat(latitude);
@@ -125,7 +131,30 @@ export default function MapScreen() {
         },
         1500,
       );
+
+      // Start GPS warm-up subscription — this keeps the GPS chip active
+      // so it has a full satellite lock by the time navigation starts.
+      // Uses BestForNavigation accuracy to prime the highest-quality fix.
+      sub = await Location.watchPositionAsync(
+        {
+          accuracy: Location.Accuracy.BestForNavigation,
+          timeInterval: 2000,
+          distanceInterval: 5,
+        },
+        (newLoc) => {
+          // Only accept readings with good accuracy (≤20m)
+          if (newLoc.coords.accuracy !== null && newLoc.coords.accuracy > 20) return;
+          setUserLat(newLoc.coords.latitude);
+          setUserLng(newLoc.coords.longitude);
+        },
+      );
+      gpsWarmupRef.current = sub;
     })();
+
+    return () => {
+      sub?.remove();
+      gpsWarmupRef.current = null;
+    };
   }, [reverseGeocode]);
 
   // --- Handle back button when expanded ---
