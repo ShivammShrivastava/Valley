@@ -45,12 +45,154 @@ const POPULAR_PLACES = [
   { name: 'Sapna Sangeeta', lat: 22.7276, lon: 75.8721 },
   { name: 'Bengali Square', lat: 22.7084, lon: 75.9229 },
   { name: 'Bhanwarkuan', lat: 22.6952, lon: 75.8674 },
-  { name: 'Sarwate Bus Stand', lat: 22.7136, lon: 75.8566 },
+  { name: 'Bicholi Mardana', lat: 22.7350, lon: 75.8120 },
+  { name: 'Dewas Naka', lat: 22.7550, lon: 75.8930 },
+  { name: 'Khajrana', lat: 22.7238, lon: 75.9130 },
+  { name: 'Rau', lat: 22.6654, lon: 75.8698 },
   { name: 'MR 10', lat: 22.7473, lon: 75.8881 },
-  { name: 'AB Road', lat: 22.7234, lon: 75.8733 },
 ];
 
-// --- Helper: extract Indian-friendly display name from Nominatim result ---
+// ---------------------------------------------------------------------------
+// Local landmarks database — buildings, societies, nakas, and places that
+// OpenStreetMap / Nominatim doesn't index well (or at all).
+// These get matched via fuzzy keyword search and appear INSTANTLY.
+// ---------------------------------------------------------------------------
+const LOCAL_LANDMARKS = [
+  // --- Nakas & Chowks ---
+  { name: 'Dewas Naka', area: 'Indore', lat: 22.7550, lon: 75.8930, kw: ['dewas', 'naka'] },
+  { name: 'Bhawarkuan Square', area: 'Indore', lat: 22.6952, lon: 75.8674, kw: ['bhawarkuan', 'bhanwarkuan', 'bhanwar'] },
+  { name: 'Geeta Bhawan Square', area: 'Indore', lat: 22.7244, lon: 75.8626, kw: ['geeta', 'bhawan', 'chowk', 'chauraha'] },
+  { name: 'LIG Square', area: 'Indore', lat: 22.7389, lon: 75.8867, kw: ['lig', 'square'] },
+  { name: 'Pipliyahana Square', area: 'Indore', lat: 22.7297, lon: 75.8850, kw: ['pipliyahana', 'pipliya'] },
+  { name: 'Mhow Naka', area: 'Indore', lat: 22.6873, lon: 75.8592, kw: ['mhow', 'naka'] },
+  { name: 'Radisson Square', area: 'Indore', lat: 22.7175, lon: 75.8867, kw: ['radisson', 'square'] },
+  { name: 'Bombay Hospital Square', area: 'Ring Road', lat: 22.7389, lon: 75.8556, kw: ['bombay', 'hospital'] },
+  { name: 'Niranjanpur Square', area: 'Indore', lat: 22.7104, lon: 75.8867, kw: ['niranjanpur', 'niranjan'] },
+
+  // --- Neighborhoods & Areas ---
+  { name: 'Bicholi Mardana', area: 'Indore', lat: 22.7350, lon: 75.8120, kw: ['bicholi', 'mardana'] },
+  { name: 'Bicholi Hapsi', area: 'Indore', lat: 22.7550, lon: 75.8200, kw: ['bicholi', 'hapsi'] },
+  { name: 'Scheme No. 54', area: 'Vijay Nagar', lat: 22.7500, lon: 75.8950, kw: ['scheme 54', 'scheme54', '54'] },
+  { name: 'Scheme No. 78', area: 'Vijay Nagar', lat: 22.7560, lon: 75.8980, kw: ['scheme 78', 'scheme78', '78'] },
+  { name: 'Scheme No. 140', area: 'Indore', lat: 22.7430, lon: 75.9100, kw: ['scheme 140', 'scheme140', '140'] },
+  { name: 'Silicon City', area: 'Indore', lat: 22.7150, lon: 75.9050, kw: ['silicon', 'city'] },
+  { name: 'Super Corridor', area: 'Indore', lat: 22.7620, lon: 75.9180, kw: ['super', 'corridor'] },
+  { name: 'Kanadia Road', area: 'Indore', lat: 22.7350, lon: 75.8350, kw: ['kanadia', 'road'] },
+  { name: 'Bypass Road', area: 'Indore', lat: 22.7300, lon: 75.9200, kw: ['bypass', 'road'] },
+  { name: 'Ring Road', area: 'Indore', lat: 22.7350, lon: 75.8600, kw: ['ring', 'road'] },
+  { name: 'Sudama Nagar', area: 'Indore', lat: 22.6950, lon: 75.8780, kw: ['sudama', 'nagar'] },
+  { name: 'Annapurna Road', area: 'Indore', lat: 22.7050, lon: 75.8700, kw: ['annapurna', 'road'] },
+  { name: 'Sneh Nagar', area: 'Indore', lat: 22.7120, lon: 75.8780, kw: ['sneh', 'nagar'] },
+  { name: 'Mahalaxmi Nagar', area: 'Indore', lat: 22.7400, lon: 75.8900, kw: ['mahalaxmi', 'mahalakshmi', 'nagar'] },
+  { name: 'Tilak Nagar', area: 'Indore', lat: 22.7170, lon: 75.8570, kw: ['tilak', 'nagar'] },
+
+  // --- Malls & Markets ---
+  { name: 'C21 Mall', area: 'AB Road, Indore', lat: 22.7411, lon: 75.9067, kw: ['c21', 'mall'] },
+  { name: 'Treasure Island Mall', area: 'MG Road, Indore', lat: 22.7200, lon: 75.8700, kw: ['treasure', 'island', 'ti mall'] },
+  { name: 'Mangal City Mall', area: 'AB Road, Indore', lat: 22.7384, lon: 75.8850, kw: ['mangal', 'city', 'mall'] },
+  { name: 'Phoenix Citadel', area: 'AB Road, Indore', lat: 22.7250, lon: 75.8700, kw: ['phoenix', 'citadel'] },
+  { name: 'Central Mall', area: 'RNT Marg, Indore', lat: 22.7176, lon: 75.8641, kw: ['central', 'mall'] },
+  { name: 'Orbit Mall', area: 'AB Road, Indore', lat: 22.7236, lon: 75.8733, kw: ['orbit', 'mall'] },
+
+  // --- Buildings & Societies (user-requested) ---
+  { name: 'Anand Heritage', area: 'Bicholi Mardana', lat: 22.7350, lon: 75.8160, kw: ['anand', 'heritage'] },
+  { name: 'Shreeji Heights', area: 'Shreeji Valley, Bicholi Mardana', lat: 22.7340, lon: 75.8150, kw: ['shreeji', 'heights'] },
+  { name: 'Shreeji Valley', area: 'Bicholi Mardana', lat: 22.7338, lon: 75.8148, kw: ['shreeji', 'valley'] },
+
+  // --- Temples & Religious ---
+  { name: 'Khajrana Ganesh Temple', area: 'Khajrana', lat: 22.7238, lon: 75.9130, kw: ['khajrana', 'ganesh', 'temple', 'mandir'] },
+  { name: 'Annapurna Temple', area: 'Sudama Nagar', lat: 22.6990, lon: 75.8730, kw: ['annapurna', 'temple', 'mandir'] },
+  { name: 'Lalbagh Palace', area: 'Indore', lat: 22.7125, lon: 75.8520, kw: ['lalbagh', 'palace'] },
+
+  // --- Hospitals ---
+  { name: 'MY Hospital', area: 'Indore', lat: 22.7140, lon: 75.8510, kw: ['my', 'hospital', 'maharaja', 'yeshwantrao'] },
+  { name: 'CHL Hospital', area: 'AB Road', lat: 22.7350, lon: 75.8850, kw: ['chl', 'hospital'] },
+  { name: 'Medanta Hospital', area: 'AB Road', lat: 22.7340, lon: 75.8920, kw: ['medanta', 'hospital'] },
+  { name: 'Choithram Hospital', area: 'Manik Bagh Road', lat: 22.7050, lon: 75.8490, kw: ['choithram', 'hospital'] },
+
+  // --- Transport ---
+  { name: 'Indore Junction', area: 'Railway Station', lat: 22.7195, lon: 75.8367, kw: ['indore', 'junction', 'railway', 'station', 'rail'] },
+  { name: 'Sarwate Bus Stand', area: 'Indore', lat: 22.7136, lon: 75.8566, kw: ['sarwate', 'bus', 'stand'] },
+  { name: 'Gangwal Bus Stand', area: 'Indore', lat: 22.7190, lon: 75.8550, kw: ['gangwal', 'bus', 'stand'] },
+  { name: 'Indore Airport', area: 'Devi Ahilyabai Holkar Airport', lat: 22.7218, lon: 75.8011, kw: ['airport', 'devi', 'ahilyabai'] },
+
+  // --- Education ---
+  { name: 'IIT Indore', area: 'Simrol', lat: 22.5204, lon: 75.9207, kw: ['iit', 'indore', 'simrol'] },
+  { name: 'IIM Indore', area: 'Rau-Pithampur Road', lat: 22.6550, lon: 75.8400, kw: ['iim', 'indore'] },
+  { name: 'DAVV University', area: 'Khandwa Road', lat: 22.6900, lon: 75.8600, kw: ['davv', 'university', 'devi', 'ahilya'] },
+  { name: 'Medicaps University', area: 'Rau', lat: 22.6680, lon: 75.8530, kw: ['medicaps', 'university'] },
+];
+
+// --- Fuzzy search the local landmarks database ---
+const searchLocalLandmarks = (query: string): any[] => {
+  const q = query.toLowerCase().trim();
+  if (q.length < 2) return [];
+
+  const words = q.split(/\s+/);
+
+  return LOCAL_LANDMARKS.filter((place) => {
+    // Check if name contains query
+    const nameMatch = place.name.toLowerCase().includes(q);
+    // Check if area contains query
+    const areaMatch = place.area.toLowerCase().includes(q);
+    // Check if any keyword matches any query word
+    const keywordMatch = place.kw.some((kw) =>
+      words.some((w) => kw.includes(w) || w.includes(kw)),
+    );
+    return nameMatch || areaMatch || keywordMatch;
+  })
+    .slice(0, 5) // limit to 5 local results
+    .map((place) => ({
+      // Format as Nominatim-compatible result object
+      lat: place.lat.toString(),
+      lon: place.lon.toString(),
+      place_id: `local_${place.name.replace(/\s/g, '_')}`,
+      name: place.name,
+      display_name: `${place.name}, ${place.area}, Indore`,
+      namedetails: { name: place.name },
+      address: { suburb: place.area, city: 'Indore' },
+      _isLocal: true, // tag for deduplication
+    }));
+};
+
+// --- Convert Photon GeoJSON result to Nominatim-compatible format ---
+const photonToNominatim = (feature: any): any => {
+  const props = feature.properties || {};
+  const [lon, lat] = feature.geometry?.coordinates || [0, 0];
+  return {
+    lat: lat.toString(),
+    lon: lon.toString(),
+    place_id: `photon_${props.osm_id || Math.random()}`,
+    name: props.name || '',
+    display_name: [props.name, props.street, props.suburb, props.city, props.state]
+      .filter(Boolean)
+      .join(', '),
+    namedetails: { name: props.name || '' },
+    address: {
+      suburb: props.suburb || props.district || '',
+      neighbourhood: props.neighbourhood || '',
+      city: props.city || props.town || '',
+      state: props.state || '',
+    },
+  };
+};
+
+// --- Deduplicate results by proximity (within ~200m = same place) ---
+const dedupeResults = (results: any[]): any[] => {
+  const seen: Array<{ lat: number; lon: number }> = [];
+  return results.filter((r) => {
+    const lat = parseFloat(r.lat);
+    const lon = parseFloat(r.lon);
+    if (isNaN(lat) || isNaN(lon)) return false;
+    const isDupe = seen.some(
+      (s) => Math.abs(s.lat - lat) < 0.002 && Math.abs(s.lon - lon) < 0.002,
+    );
+    if (!isDupe) seen.push({ lat, lon });
+    return !isDupe;
+  });
+};
+
+// --- Helper: extract Indian-friendly display name from result ---
 const getDisplayName = (result: any): { main: string; sub: string } => {
   const name = result.namedetails?.name || result.name || '';
   const suburb =
@@ -65,11 +207,9 @@ const getDisplayName = (result: any): { main: string; sub: string } => {
     result.address?.county ||
     'Indore';
 
-  // If suburb exists and is different from the name, show both
   if (suburb && suburb !== name) {
     return { main: name || suburb, sub: `${suburb !== name ? suburb + ', ' : ''}${city}` };
   }
-  // If name is very long (full address), truncate to first meaningful part
   if (name.length > 40) {
     return { main: name.split(',')[0].trim(), sub: city };
   }
@@ -221,7 +361,7 @@ export default function MapScreen() {
     return () => handler.remove();
   }, [isExpanded]);
 
-  // --- Nominatim Search (optimized for Indian landmarks & areas) ---
+  // --- Multi-source search: Local DB + Nominatim + Photon (parallel) ---
   const doSearch = useCallback(async (q: string) => {
     if (!q.trim()) {
       setResults([]);
@@ -230,13 +370,25 @@ export default function MapScreen() {
     }
     setSearching(true);
     try {
-      // Single smart query: viewbox prioritizes Indore, bounded=0 allows
-      // results outside Indore if nothing found locally.
-      // namedetails=1 gives us the local/popular name (not just address)
-      // addressdetails=1 gives us suburb, city etc. for Indian-style display
-      const searchUrl =
+      // Source 1: LOCAL LANDMARKS (instant — no network call)
+      const localResults = searchLocalLandmarks(q);
+
+      // Show local results immediately while network requests are in-flight
+      if (localResults.length > 0) {
+        setResults(localResults);
+        setShowResults(true);
+      }
+
+      // For Nominatim: append "indore" to short queries for better context
+      // "bicholi mardana" → "bicholi mardana, indore" gives much better results
+      const qLower = q.toLowerCase();
+      const needsContext = q.length < 25 && !qLower.includes('indore');
+      const nominatimQuery = needsContext ? `${q}, Indore` : q;
+
+      // Source 2: NOMINATIM (OpenStreetMap geocoder)
+      const nominatimUrl =
         `https://nominatim.openstreetmap.org/search` +
-        `?q=${encodeURIComponent(q)}` +
+        `?q=${encodeURIComponent(nominatimQuery)}` +
         `&format=json` +
         `&limit=7` +
         `&countrycodes=in` +
@@ -246,18 +398,50 @@ export default function MapScreen() {
         `&addressdetails=1` +
         `&accept-language=en`;
 
-      const res = await fetch(searchUrl, {
+      const nominatimPromise = fetch(nominatimUrl, {
         headers: {
           'User-Agent': 'SuvegaApp/1.0 (indore navigation)',
           'Accept-Language': 'en',
         },
-      });
-      const data = await res.json();
+      }).then((r) => r.json()).catch(() => []);
 
-      setResults(data);
-      setShowResults(data.length > 0);
+      // Source 3: PHOTON (better fuzzy matching, proximity-biased to Indore)
+      const photonUrl =
+        `https://photon.komoot.io/api/` +
+        `?q=${encodeURIComponent(q)}` +
+        `&lat=22.7196&lon=75.8577` +
+        `&limit=5` +
+        `&lang=en`;
+
+      const photonPromise = fetch(photonUrl, {
+        headers: { 'User-Agent': 'SuvegaApp/1.0' },
+      })
+        .then((r) => r.json())
+        .then((data) => (data.features || []).map(photonToNominatim))
+        .catch(() => []);
+
+      // Wait for both network searches in parallel
+      const [nominatimData, photonData] = await Promise.all([
+        nominatimPromise,
+        photonPromise,
+      ]);
+
+      // Merge: Local first (curated), then Nominatim, then Photon
+      const merged = [...localResults, ...nominatimData, ...photonData];
+
+      // Deduplicate by proximity (~200m radius)
+      const deduped = dedupeResults(merged);
+
+      // Limit to 10 results total
+      const final = deduped.slice(0, 10);
+
+      setResults(final);
+      setShowResults(final.length > 0);
     } catch {
-      setResults([]);
+      // If everything fails, at least show local results
+      const fallback = searchLocalLandmarks(q);
+      setResults(fallback);
+      setShowResults(fallback.length > 0);
     } finally {
       setSearching(false);
     }
