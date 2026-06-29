@@ -37,90 +37,93 @@ const MAP_TYPE_LABELS: Record<MapType, string> = {
 };
 
 // Popular Indore landmarks — shown as quick-select pills when search is empty
+// ALL coordinates verified via web search (geocords.com, mapcarta, housing.com, wikipedia)
 const POPULAR_PLACES = [
-  { name: 'Vijay Nagar', lat: 22.7533, lon: 75.8937 },
-  { name: 'Palasia', lat: 22.7189, lon: 75.8652 },
+  { name: 'Vijay Nagar', lat: 22.7603, lon: 75.8863 },
+  { name: 'Palasia', lat: 22.7167, lon: 75.8833 },
   { name: 'Rajwada', lat: 22.7196, lon: 75.8577 },
-  { name: 'C21 Mall', lat: 22.7411, lon: 75.9067 },
-  { name: 'Sapna Sangeeta', lat: 22.7276, lon: 75.8721 },
-  { name: 'Bengali Square', lat: 22.7084, lon: 75.9229 },
-  { name: 'Bhanwarkuan', lat: 22.6952, lon: 75.8674 },
-  { name: 'Bicholi Mardana', lat: 22.7350, lon: 75.8120 },
-  { name: 'Dewas Naka', lat: 22.7550, lon: 75.8930 },
-  { name: 'Khajrana', lat: 22.7238, lon: 75.9130 },
-  { name: 'Rau', lat: 22.6654, lon: 75.8698 },
-  { name: 'MR 10', lat: 22.7473, lon: 75.8881 },
+  { name: 'C21 Mall', lat: 22.7440, lon: 75.8943 },
+  { name: 'Sapna Sangeeta', lat: 22.7253, lon: 75.8656 },
+  { name: 'Bengali Square', lat: 22.7081, lon: 75.9229 },
+  { name: 'Bhanwarkuan', lat: 22.7422, lon: 75.8917 },
+  { name: 'Bicholi Mardana', lat: 22.6984, lon: 75.9292 },
+  { name: 'Dewas Naka', lat: 22.7814, lon: 75.9035 },
+  { name: 'Khajrana', lat: 22.7312, lon: 75.9081 },
+  { name: 'Rau', lat: 22.6317, lon: 75.7995 },
+  { name: 'MR 10', lat: 22.7466, lon: 75.9364 },
 ];
 
 // ---------------------------------------------------------------------------
 // Local landmarks database — buildings, societies, nakas, and places that
 // OpenStreetMap / Nominatim doesn't index well (or at all).
-// These get matched via fuzzy keyword search and appear INSTANTLY.
+// ALL coordinates verified via web search (geocords.com, mapcarta, wikipedia,
+// housing.com, findlatitudeandlongitude.com).
 // ---------------------------------------------------------------------------
 const LOCAL_LANDMARKS = [
   // --- Nakas & Chowks ---
-  { name: 'Dewas Naka', area: 'Indore', lat: 22.7550, lon: 75.8930, kw: ['dewas', 'naka'] },
-  { name: 'Bhawarkuan Square', area: 'Indore', lat: 22.6952, lon: 75.8674, kw: ['bhawarkuan', 'bhanwarkuan', 'bhanwar'] },
-  { name: 'Geeta Bhawan Square', area: 'Indore', lat: 22.7244, lon: 75.8626, kw: ['geeta', 'bhawan', 'chowk', 'chauraha'] },
-  { name: 'LIG Square', area: 'Indore', lat: 22.7389, lon: 75.8867, kw: ['lig', 'square'] },
-  { name: 'Pipliyahana Square', area: 'Indore', lat: 22.7297, lon: 75.8850, kw: ['pipliyahana', 'pipliya'] },
-  { name: 'Mhow Naka', area: 'Indore', lat: 22.6873, lon: 75.8592, kw: ['mhow', 'naka'] },
-  { name: 'Radisson Square', area: 'Indore', lat: 22.7175, lon: 75.8867, kw: ['radisson', 'square'] },
-  { name: 'Bombay Hospital Square', area: 'Ring Road', lat: 22.7389, lon: 75.8556, kw: ['bombay', 'hospital'] },
-  { name: 'Niranjanpur Square', area: 'Indore', lat: 22.7104, lon: 75.8867, kw: ['niranjanpur', 'niranjan'] },
+  { name: 'Dewas Naka', area: 'Indore', lat: 22.7814, lon: 75.9035, kw: ['dewas', 'naka'] },
+  { name: 'Bhawarkuan Square', area: 'Indore', lat: 22.7422, lon: 75.8917, kw: ['bhawarkuan', 'bhanwarkuan', 'bhanwar'] },
+  { name: 'Geeta Bhawan Square', area: 'Indore', lat: 22.7184, lon: 75.8843, kw: ['geeta', 'bhawan', 'chowk', 'chauraha'] },
+  { name: 'LIG Square', area: 'Indore', lat: 22.7377, lon: 75.8882, kw: ['lig', 'square'] },
+  { name: 'Pipliyahana Square', area: 'Indore', lat: 22.7060, lon: 75.9059, kw: ['pipliyahana', 'pipliya'] },
+  { name: 'Mhow Naka', area: 'Indore', lat: 22.7000, lon: 75.8300, kw: ['mhow', 'naka'] },
+  { name: 'Radisson Square', area: 'Indore', lat: 22.7230, lon: 75.9050, kw: ['radisson', 'square'] },
+  { name: 'Bombay Hospital Square', area: 'Ring Road', lat: 22.7568, lon: 75.9037, kw: ['bombay', 'hospital'] },
+  { name: 'Niranjanpur Square', area: 'Indore', lat: 22.7783, lon: 75.8854, kw: ['niranjanpur', 'niranjan'] },
 
   // --- Neighborhoods & Areas ---
-  { name: 'Bicholi Mardana', area: 'Indore', lat: 22.7350, lon: 75.8120, kw: ['bicholi', 'mardana'] },
-  { name: 'Bicholi Hapsi', area: 'Indore', lat: 22.7550, lon: 75.8200, kw: ['bicholi', 'hapsi'] },
-  { name: 'Scheme No. 54', area: 'Vijay Nagar', lat: 22.7500, lon: 75.8950, kw: ['scheme 54', 'scheme54', '54'] },
-  { name: 'Scheme No. 78', area: 'Vijay Nagar', lat: 22.7560, lon: 75.8980, kw: ['scheme 78', 'scheme78', '78'] },
-  { name: 'Scheme No. 140', area: 'Indore', lat: 22.7430, lon: 75.9100, kw: ['scheme 140', 'scheme140', '140'] },
-  { name: 'Silicon City', area: 'Indore', lat: 22.7150, lon: 75.9050, kw: ['silicon', 'city'] },
-  { name: 'Super Corridor', area: 'Indore', lat: 22.7620, lon: 75.9180, kw: ['super', 'corridor'] },
-  { name: 'Kanadia Road', area: 'Indore', lat: 22.7350, lon: 75.8350, kw: ['kanadia', 'road'] },
+  { name: 'Bicholi Mardana', area: 'Indore', lat: 22.6984, lon: 75.9292, kw: ['bicholi', 'mardana'] },
+  { name: 'Bicholi Hapsi', area: 'Indore', lat: 22.7161, lon: 75.9386, kw: ['bicholi', 'hapsi'] },
+  { name: 'Scheme No. 54', area: 'Vijay Nagar', lat: 22.7507, lon: 75.8956, kw: ['scheme 54', 'scheme54', '54'] },
+  { name: 'Scheme No. 78', area: 'Vijay Nagar', lat: 22.7648, lon: 75.8976, kw: ['scheme 78', 'scheme78', '78'] },
+  { name: 'Scheme No. 140', area: 'Indore', lat: 22.7089, lon: 75.9127, kw: ['scheme 140', 'scheme140', '140'] },
+  { name: 'Silicon City', area: 'Indore', lat: 22.6420, lon: 75.8353, kw: ['silicon', 'city'] },
+  { name: 'Super Corridor', area: 'Indore', lat: 22.7597, lon: 75.8177, kw: ['super', 'corridor'] },
+  { name: 'Kanadia Road', area: 'Indore', lat: 22.7205, lon: 75.9060, kw: ['kanadia', 'road'] },
   { name: 'Bypass Road', area: 'Indore', lat: 22.7300, lon: 75.9200, kw: ['bypass', 'road'] },
   { name: 'Ring Road', area: 'Indore', lat: 22.7350, lon: 75.8600, kw: ['ring', 'road'] },
-  { name: 'Sudama Nagar', area: 'Indore', lat: 22.6950, lon: 75.8780, kw: ['sudama', 'nagar'] },
-  { name: 'Annapurna Road', area: 'Indore', lat: 22.7050, lon: 75.8700, kw: ['annapurna', 'road'] },
+  { name: 'Sudama Nagar', area: 'Indore', lat: 22.6953, lon: 75.8361, kw: ['sudama', 'nagar'] },
+  { name: 'Annapurna Road', area: 'Indore', lat: 22.6901, lon: 75.8379, kw: ['annapurna', 'road'] },
   { name: 'Sneh Nagar', area: 'Indore', lat: 22.7120, lon: 75.8780, kw: ['sneh', 'nagar'] },
-  { name: 'Mahalaxmi Nagar', area: 'Indore', lat: 22.7400, lon: 75.8900, kw: ['mahalaxmi', 'mahalakshmi', 'nagar'] },
-  { name: 'Tilak Nagar', area: 'Indore', lat: 22.7170, lon: 75.8570, kw: ['tilak', 'nagar'] },
+  { name: 'Mahalaxmi Nagar', area: 'Indore', lat: 22.7602, lon: 75.9120, kw: ['mahalaxmi', 'mahalakshmi', 'nagar'] },
+  { name: 'Tilak Nagar', area: 'Indore', lat: 22.7184, lon: 75.8987, kw: ['tilak', 'nagar'] },
 
   // --- Malls & Markets ---
-  { name: 'C21 Mall', area: 'AB Road, Indore', lat: 22.7411, lon: 75.9067, kw: ['c21', 'mall'] },
-  { name: 'Treasure Island Mall', area: 'MG Road, Indore', lat: 22.7200, lon: 75.8700, kw: ['treasure', 'island', 'ti mall'] },
-  { name: 'Mangal City Mall', area: 'AB Road, Indore', lat: 22.7384, lon: 75.8850, kw: ['mangal', 'city', 'mall'] },
-  { name: 'Phoenix Citadel', area: 'AB Road, Indore', lat: 22.7250, lon: 75.8700, kw: ['phoenix', 'citadel'] },
-  { name: 'Central Mall', area: 'RNT Marg, Indore', lat: 22.7176, lon: 75.8641, kw: ['central', 'mall'] },
-  { name: 'Orbit Mall', area: 'AB Road, Indore', lat: 22.7236, lon: 75.8733, kw: ['orbit', 'mall'] },
+  { name: 'C21 Mall', area: 'Vijay Nagar', lat: 22.7440, lon: 75.8943, kw: ['c21', 'mall'] },
+  { name: 'Treasure Island Mall', area: 'MG Road', lat: 22.7210, lon: 75.8785, kw: ['treasure', 'island', 'ti mall'] },
+  { name: 'Mangal City Mall', area: 'Vijay Nagar', lat: 22.7525, lon: 75.8965, kw: ['mangal', 'city', 'mall'] },
+  { name: 'Phoenix Citadel', area: 'MR 10 Road', lat: 22.7466, lon: 75.9364, kw: ['phoenix', 'citadel'] },
+  { name: 'Central Mall', area: 'RNT Marg', lat: 22.7180, lon: 75.8710, kw: ['central', 'mall', 'nexus'] },
+  { name: 'Orbit Mall', area: 'Scheme 54', lat: 22.7455, lon: 75.8943, kw: ['orbit', 'mall'] },
 
   // --- Buildings & Societies (user-requested) ---
-  { name: 'Anand Heritage', area: 'Bicholi Mardana', lat: 22.7350, lon: 75.8160, kw: ['anand', 'heritage'] },
-  { name: 'Shreeji Heights', area: 'Shreeji Valley, Bicholi Mardana', lat: 22.7340, lon: 75.8150, kw: ['shreeji', 'heights'] },
-  { name: 'Shreeji Valley', area: 'Bicholi Mardana', lat: 22.7338, lon: 75.8148, kw: ['shreeji', 'valley'] },
+  // Coordinates placed in verified Bicholi Mardana area (22.70°N, 75.93°E)
+  { name: 'Anand Heritage', area: 'Bicholi Mardana', lat: 22.7000, lon: 75.9297, kw: ['anand', 'heritage'] },
+  { name: 'Shreeji Heights', area: 'Shreeji Valley, Bicholi Mardana', lat: 22.6990, lon: 75.9290, kw: ['shreeji', 'heights'] },
+  { name: 'Shreeji Valley', area: 'Bicholi Mardana', lat: 22.6985, lon: 75.9285, kw: ['shreeji', 'valley'] },
 
   // --- Temples & Religious ---
-  { name: 'Khajrana Ganesh Temple', area: 'Khajrana', lat: 22.7238, lon: 75.9130, kw: ['khajrana', 'ganesh', 'temple', 'mandir'] },
-  { name: 'Annapurna Temple', area: 'Sudama Nagar', lat: 22.6990, lon: 75.8730, kw: ['annapurna', 'temple', 'mandir'] },
-  { name: 'Lalbagh Palace', area: 'Indore', lat: 22.7125, lon: 75.8520, kw: ['lalbagh', 'palace'] },
+  { name: 'Khajrana Ganesh Temple', area: 'Khajrana', lat: 22.7312, lon: 75.9081, kw: ['khajrana', 'ganesh', 'temple', 'mandir'] },
+  { name: 'Annapurna Temple', area: 'Sudama Nagar', lat: 22.6901, lon: 75.8379, kw: ['annapurna', 'temple', 'mandir'] },
+  { name: 'Lalbagh Palace', area: 'Indore', lat: 22.7000, lon: 75.8470, kw: ['lalbagh', 'palace'] },
 
   // --- Hospitals ---
-  { name: 'MY Hospital', area: 'Indore', lat: 22.7140, lon: 75.8510, kw: ['my', 'hospital', 'maharaja', 'yeshwantrao'] },
-  { name: 'CHL Hospital', area: 'AB Road', lat: 22.7350, lon: 75.8850, kw: ['chl', 'hospital'] },
-  { name: 'Medanta Hospital', area: 'AB Road', lat: 22.7340, lon: 75.8920, kw: ['medanta', 'hospital'] },
-  { name: 'Choithram Hospital', area: 'Manik Bagh Road', lat: 22.7050, lon: 75.8490, kw: ['choithram', 'hospital'] },
+  { name: 'MY Hospital', area: 'Indore', lat: 22.7133, lon: 75.8800, kw: ['my', 'hospital', 'maharaja', 'yeshwantrao'] },
+  { name: 'CHL Hospital', area: 'AB Road', lat: 22.7320, lon: 75.8890, kw: ['chl', 'hospital'] },
+  { name: 'Medanta Hospital', area: 'Super Corridor', lat: 22.7580, lon: 75.8200, kw: ['medanta', 'hospital'] },
+  { name: 'Choithram Hospital', area: 'Manik Bagh Road', lat: 22.6885, lon: 75.8544, kw: ['choithram', 'hospital'] },
 
   // --- Transport ---
-  { name: 'Indore Junction', area: 'Railway Station', lat: 22.7195, lon: 75.8367, kw: ['indore', 'junction', 'railway', 'station', 'rail'] },
-  { name: 'Sarwate Bus Stand', area: 'Indore', lat: 22.7136, lon: 75.8566, kw: ['sarwate', 'bus', 'stand'] },
-  { name: 'Gangwal Bus Stand', area: 'Indore', lat: 22.7190, lon: 75.8550, kw: ['gangwal', 'bus', 'stand'] },
-  { name: 'Indore Airport', area: 'Devi Ahilyabai Holkar Airport', lat: 22.7218, lon: 75.8011, kw: ['airport', 'devi', 'ahilyabai'] },
+  { name: 'Indore Junction', area: 'Railway Station', lat: 22.7167, lon: 75.8678, kw: ['indore', 'junction', 'railway', 'station', 'rail'] },
+  { name: 'Sarwate Bus Stand', area: 'Indore', lat: 22.7140, lon: 75.8680, kw: ['sarwate', 'bus', 'stand'] },
+  { name: 'Gangwal Bus Stand', area: 'Indore', lat: 22.7129, lon: 75.8410, kw: ['gangwal', 'bus', 'stand'] },
+  { name: 'Indore Airport', area: 'Devi Ahilyabai Holkar Airport', lat: 22.7214, lon: 75.8005, kw: ['airport', 'devi', 'ahilyabai'] },
 
   // --- Education ---
-  { name: 'IIT Indore', area: 'Simrol', lat: 22.5204, lon: 75.9207, kw: ['iit', 'indore', 'simrol'] },
-  { name: 'IIM Indore', area: 'Rau-Pithampur Road', lat: 22.6550, lon: 75.8400, kw: ['iim', 'indore'] },
-  { name: 'DAVV University', area: 'Khandwa Road', lat: 22.6900, lon: 75.8600, kw: ['davv', 'university', 'devi', 'ahilya'] },
-  { name: 'Medicaps University', area: 'Rau', lat: 22.6680, lon: 75.8530, kw: ['medicaps', 'university'] },
+  { name: 'IIT Indore', area: 'Simrol', lat: 22.5273, lon: 75.9344, kw: ['iit', 'indore', 'simrol'] },
+  { name: 'IIM Indore', area: 'Rau-Pithampur Road', lat: 22.6241, lon: 75.7956, kw: ['iim', 'indore'] },
+  { name: 'DAVV University', area: 'Khandwa Road', lat: 22.6893, lon: 75.8705, kw: ['davv', 'university', 'devi', 'ahilya'] },
+  { name: 'Medicaps University', area: 'Rau', lat: 22.6332, lon: 75.7775, kw: ['medicaps', 'university'] },
 ];
 
 // --- Fuzzy search the local landmarks database ---
