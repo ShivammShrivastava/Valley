@@ -352,6 +352,10 @@ export default function MapScreen() {
         showsMyLocationButton={false}
         showsCompass={false}
         toolbarEnabled={false}
+        rotateEnabled={true}
+        pitchEnabled={true}
+        scrollEnabled={true}
+        zoomEnabled={true}
         loadingEnabled={true}
         loadingIndicatorColor="#00E676"
         loadingBackgroundColor="#0B0B0B"

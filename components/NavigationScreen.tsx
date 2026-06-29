@@ -15,6 +15,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   fetchTrafficSignals,
+  filterSignalsByRoute,
   findNearestSignalOnRoute,
   computeSpeedAdvisory,
   TrafficSignal,
@@ -148,6 +149,7 @@ export default function NavigationScreen() {
 
   // Traffic signals
   const [signals, setSignals] = useState<TrafficSignal[]>([]);
+  const [filteredSignals, setFilteredSignals] = useState<TrafficSignal[]>([]);
   const [nearestSignal, setNearestSignal] = useState<{
     signal: TrafficSignal;
     distance: number;
@@ -160,15 +162,41 @@ export default function NavigationScreen() {
   const locationSubRef = useRef<Location.LocationSubscription | null>(null);
   const advisoryIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // --- Fetch traffic signals from Firestore ---
+  // --- Fetch traffic signals from Firestore (with background refresh) ---
+  // First call returns cached data instantly (if available).
+  // Fresh data from Firestore arrives via the onUpdate callback silently.
   useEffect(() => {
     (async () => {
       setSignalLoading(true);
-      const sigs = await fetchTrafficSignals();
+      const sigs = await fetchTrafficSignals((freshSignals) => {
+        // Background refresh: silently update when fresh Firestore data arrives
+        setSignals(freshSignals);
+      });
       setSignals(sigs);
       setSignalLoading(false);
     })();
   }, []);
+
+  // --- Filter signals by route direction ("Going Towards" field) ---
+  // Re-runs whenever signals or the route changes (including reroutes)
+  useEffect(() => {
+    if (signals.length === 0 || fullRoute.length === 0) {
+      setFilteredSignals([]);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      const filtered = await filterSignalsByRoute(signals, fullRoute);
+      if (!cancelled) {
+        setFilteredSignals(filtered);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [signals, fullRoute]);
 
   // --- Fetch initial route once we have user location ---
   const loadRoute = useCallback(
@@ -289,17 +317,18 @@ export default function NavigationScreen() {
   }, [loadRoute, pushSpeedAndSmooth, computeFallbackSpeed]);
 
   // --- Find nearest signal and get advisory ---
+  // Uses filteredSignals (already filtered by "Going Towards" direction)
   useEffect(() => {
-    if (!hasLocation || signals.length === 0 || fullRoute.length === 0) return;
+    if (!hasLocation || filteredSignals.length === 0 || fullRoute.length === 0) return;
 
     const nearest = findNearestSignalOnRoute(
-      signals,
+      filteredSignals,
       userLat,
       userLng,
       fullRoute,
     );
     setNearestSignal(nearest);
-  }, [userLat, userLng, hasLocation, signals, fullRoute]);
+  }, [userLat, userLng, hasLocation, filteredSignals, fullRoute]);
 
   // --- Poll speed advisory (computed on-device, no server needed) ---
   useEffect(() => {
