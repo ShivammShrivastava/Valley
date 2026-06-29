@@ -21,6 +21,7 @@ import {
   TrafficSignal,
   SpeedAdvisory,
 } from '../services/trafficSignals';
+import { SpeedTracker } from '../services/speedTracker';
 
 // Map type definitions
 const MAP_TYPES = ['standard', 'satellite', 'terrain', 'hybrid'] as const;
@@ -119,19 +120,11 @@ export default function NavigationScreen() {
   // User location
   const [userLat, setUserLat] = useState(0);
   const [userLng, setUserLng] = useState(0);
-  const [userSpeed, setUserSpeed] = useState(0); // m/s — smoothed
+  const [userSpeedKmh, setUserSpeedKmh] = useState(0); // km/h — Kalman filtered
   const [hasLocation, setHasLocation] = useState(false);
 
-  // Speed smoothing: 3-reading moving average buffer
-  const speedBufferRef = useRef<number[]>([]);
-  const SPEED_BUFFER_SIZE = 3;
-
-  // Fallback speed: track last valid position + timestamp
-  const lastValidPosRef = useRef<{
-    lat: number;
-    lng: number;
-    time: number;
-  } | null>(null);
+  // High-accuracy speed engine (Kalman filter + adaptive EMA + stationary detection)
+  const speedTrackerRef = useRef(new SpeedTracker());
 
   // Route
   const [fullRoute, setFullRoute] = useState<
@@ -220,32 +213,13 @@ export default function NavigationScreen() {
     [destLat, destLng],
   );
 
-  // --- Helper: compute smoothed speed from buffer ---
-  const pushSpeedAndSmooth = useCallback((rawSpeedMs: number) => {
-    const buf = speedBufferRef.current;
-    buf.push(rawSpeedMs);
-    if (buf.length > SPEED_BUFFER_SIZE) buf.shift();
-    // Average of all readings in the buffer
-    const avg = buf.reduce((sum, v) => sum + v, 0) / buf.length;
-    setUserSpeed(avg);
-  }, []);
 
-  // --- Helper: compute fallback speed from position delta ---
-  const computeFallbackSpeed = useCallback(
-    (lat: number, lng: number, timestamp: number): number | null => {
-      const prev = lastValidPosRef.current;
-      if (!prev) return null;
-      const dtSec = (timestamp - prev.time) / 1000;
-      if (dtSec <= 0 || dtSec > 10) return null; // ignore stale gaps
-      const distM = haversineM(prev.lat, prev.lng, lat, lng);
-      return distM / dtSec; // m/s
-    },
-    [],
-  );
 
   // --- Get user location & start watching ---
   useEffect(() => {
     let sub: Location.LocationSubscription | null = null;
+    const tracker = speedTrackerRef.current;
+    tracker.reset(); // Fresh start for each navigation session
 
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -262,19 +236,27 @@ export default function NavigationScreen() {
       const { latitude, longitude, speed, accuracy: acc } = loc.coords;
       setUserLat(latitude);
       setUserLng(longitude);
-      pushSpeedAndSmooth(Math.max(0, speed ?? 0));
+
+      // Feed initial reading into SpeedTracker
+      const initSpeed = tracker.update(
+        latitude, longitude,
+        speed, acc,
+        loc.timestamp,
+      );
+      setUserSpeedKmh(initSpeed);
       setHasLocation(true);
-      lastValidPosRef.current = { lat: latitude, lng: longitude, time: loc.timestamp };
 
       // Fetch initial route
       await loadRoute(latitude, longitude);
 
       // Watch position for live updates — optimized for vehicle navigation
+      // timeInterval: 500ms = 2 readings/sec (good balance for Kalman filter)
+      // distanceInterval: 0 = trigger even when stationary (for stationary detection)
       sub = await Location.watchPositionAsync(
         {
           accuracy: Location.Accuracy.BestForNavigation,
-          distanceInterval: 1,    // trigger on 1m movement
-          timeInterval: 500,       // poll every 500ms (4 readings/sec)
+          distanceInterval: 0,
+          timeInterval: 500,
         },
         (newLoc) => {
           const {
@@ -284,28 +266,24 @@ export default function NavigationScreen() {
             accuracy: locAccuracy,
           } = newLoc.coords;
 
-          // --- Accuracy filter: discard readings with >20m uncertainty ---
-          // These are tower-based or poor satellite fixes that cause position jumps.
-          if (locAccuracy !== null && locAccuracy > 20) return;
+          // --- Accuracy gate: discard very poor fixes ---
+          // But use a softer threshold (30m) since SpeedTracker's Kalman
+          // filter already handles noise — hard rejection at 20m was
+          // throwing away too many readings and causing gaps.
+          if (locAccuracy !== null && locAccuracy > 30) return;
 
           setUserLat(lat);
           setUserLng(lng);
 
-          // --- Speed: prefer GPS speed, fall back to position delta ---
-          let speedMs: number;
-          if (spd !== null && spd >= 0) {
-            speedMs = spd;
-          } else {
-            // GPS speed unavailable — compute from position change
-            const fallback = computeFallbackSpeed(lat, lng, newLoc.timestamp);
-            speedMs = fallback !== null ? Math.max(0, fallback) : 0;
-          }
-
-          // Push into smoothing buffer (3-reading moving average)
-          pushSpeedAndSmooth(speedMs);
-
-          // Update last valid position for future fallback
-          lastValidPosRef.current = { lat, lng, time: newLoc.timestamp };
+          // Feed raw reading into SpeedTracker — it handles everything:
+          // Kalman filtering, source selection, spike rejection,
+          // EMA smoothing, and stationary detection
+          const displayKmh = tracker.update(
+            lat, lng,
+            spd, locAccuracy,
+            newLoc.timestamp,
+          );
+          setUserSpeedKmh(displayKmh);
         },
       );
       locationSubRef.current = sub;
@@ -314,7 +292,7 @@ export default function NavigationScreen() {
     return () => {
       sub?.remove();
     };
-  }, [loadRoute, pushSpeedAndSmooth, computeFallbackSpeed]);
+  }, [loadRoute]);
 
   // --- Find nearest signal and get advisory ---
   // Uses filteredSignals (already filtered by "Going Towards" direction)
@@ -335,7 +313,10 @@ export default function NavigationScreen() {
     if (!nearestSignal || !hasLocation) return;
 
     const updateAdvisory = () => {
-      const speedKmh = Math.max(0, (userSpeed ?? 0)) * 3.6; // m/s to km/h
+      // Use Kalman-filtered speed (less smoothed than display) for
+      // more responsive advisory — advisory needs to react quickly
+      // to speed changes so the user gets timely feedback.
+      const speedKmh = speedTrackerRef.current.getSpeedKmh();
       const result = computeSpeedAdvisory(
         userLat,
         userLng,
@@ -356,7 +337,7 @@ export default function NavigationScreen() {
         clearInterval(advisoryIntervalRef.current);
       }
     };
-  }, [nearestSignal, hasLocation, userLat, userLng, userSpeed]);
+  }, [nearestSignal, hasLocation, userLat, userLng, userSpeedKmh]);
 
   // --- Live route updates: trim polyline & reroute ---
   useEffect(() => {
@@ -426,7 +407,6 @@ export default function NavigationScreen() {
   // Derived values
   const midLat = hasLocation ? (userLat + destLat) / 2 : destLat;
   const midLng = hasLocation ? (userLng + destLng) / 2 : destLng;
-  const userSpeedKmh = Math.max(0, (userSpeed ?? 0)) * 3.6;
   const roundedSpeed = Math.round(userSpeedKmh);
 
   // --- Status message & icon logic ---
@@ -554,7 +534,7 @@ export default function NavigationScreen() {
           showsCompass={false}
           toolbarEnabled={false}
           rotateEnabled={true}
-          pitchEnabled={true}
+          pitchEnabled={false}
           loadingEnabled={true}
           loadingIndicatorColor="#7B6BA5"
           loadingBackgroundColor="#f5f5f5"

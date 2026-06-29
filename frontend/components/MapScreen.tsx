@@ -353,7 +353,7 @@ export default function MapScreen() {
         showsCompass={false}
         toolbarEnabled={false}
         rotateEnabled={true}
-        pitchEnabled={true}
+        pitchEnabled={false}
         scrollEnabled={true}
         zoomEnabled={true}
         loadingEnabled={true}
