@@ -12,6 +12,7 @@ import {
   Image,
   Animated,
   BackHandler,
+  ScrollView,
 } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
@@ -33,6 +34,46 @@ const MAP_TYPE_LABELS: Record<MapType, string> = {
   satellite: 'Satellite',
   terrain: 'Terrain',
   hybrid: 'Hybrid',
+};
+
+// Popular Indore landmarks — shown as quick-select pills when search is empty
+const POPULAR_PLACES = [
+  { name: 'Vijay Nagar', lat: 22.7533, lon: 75.8937 },
+  { name: 'Palasia', lat: 22.7189, lon: 75.8652 },
+  { name: 'Rajwada', lat: 22.7196, lon: 75.8577 },
+  { name: 'C21 Mall', lat: 22.7411, lon: 75.9067 },
+  { name: 'Sapna Sangeeta', lat: 22.7276, lon: 75.8721 },
+  { name: 'Bengali Square', lat: 22.7084, lon: 75.9229 },
+  { name: 'Bhanwarkuan', lat: 22.6952, lon: 75.8674 },
+  { name: 'Sarwate Bus Stand', lat: 22.7136, lon: 75.8566 },
+  { name: 'MR 10', lat: 22.7473, lon: 75.8881 },
+  { name: 'AB Road', lat: 22.7234, lon: 75.8733 },
+];
+
+// --- Helper: extract Indian-friendly display name from Nominatim result ---
+const getDisplayName = (result: any): { main: string; sub: string } => {
+  const name = result.namedetails?.name || result.name || '';
+  const suburb =
+    result.address?.suburb ||
+    result.address?.neighbourhood ||
+    result.address?.quarter ||
+    result.address?.village ||
+    '';
+  const city =
+    result.address?.city ||
+    result.address?.town ||
+    result.address?.county ||
+    'Indore';
+
+  // If suburb exists and is different from the name, show both
+  if (suburb && suburb !== name) {
+    return { main: name || suburb, sub: `${suburb !== name ? suburb + ', ' : ''}${city}` };
+  }
+  // If name is very long (full address), truncate to first meaningful part
+  if (name.length > 40) {
+    return { main: name.split(',')[0].trim(), sub: city };
+  }
+  return { main: name || 'Unknown place', sub: city };
 };
 
 // ---------------------------------------------------------------------------
@@ -180,7 +221,7 @@ export default function MapScreen() {
     return () => handler.remove();
   }, [isExpanded]);
 
-  // --- Nominatim Search ---
+  // --- Nominatim Search (optimized for Indian landmarks & areas) ---
   const doSearch = useCallback(async (q: string) => {
     if (!q.trim()) {
       setResults([]);
@@ -189,21 +230,29 @@ export default function MapScreen() {
     }
     setSearching(true);
     try {
-      // Bounded search first
-      const bounded = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&countrycodes=in&viewbox=75.65,22.85,76.05,22.55&bounded=1&limit=5&addressdetails=1`;
-      let res = await fetch(bounded, {
-        headers: { 'User-Agent': 'SuvegaApp/1.0' },
-      });
-      let data = await res.json();
+      // Single smart query: viewbox prioritizes Indore, bounded=0 allows
+      // results outside Indore if nothing found locally.
+      // namedetails=1 gives us the local/popular name (not just address)
+      // addressdetails=1 gives us suburb, city etc. for Indian-style display
+      const searchUrl =
+        `https://nominatim.openstreetmap.org/search` +
+        `?q=${encodeURIComponent(q)}` +
+        `&format=json` +
+        `&limit=7` +
+        `&countrycodes=in` +
+        `&viewbox=75.7,22.5,76.1,23.0` +
+        `&bounded=0` +
+        `&namedetails=1` +
+        `&addressdetails=1` +
+        `&accept-language=en`;
 
-      // Fallback: wider India search
-      if (data.length === 0) {
-        const wide = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&countrycodes=in&limit=5&addressdetails=1`;
-        res = await fetch(wide, {
-          headers: { 'User-Agent': 'SuvegaApp/1.0' },
-        });
-        data = await res.json();
-      }
+      const res = await fetch(searchUrl, {
+        headers: {
+          'User-Agent': 'SuvegaApp/1.0 (indore navigation)',
+          'Accept-Language': 'en',
+        },
+      });
+      const data = await res.json();
 
       setResults(data);
       setShowResults(data.length > 0);
@@ -233,36 +282,62 @@ export default function MapScreen() {
     (item: any) => {
       Keyboard.dismiss();
       setShowResults(false);
-      const name = item.display_name.split(',').slice(0, 2).join(', ');
+      // Use Indian-friendly display name instead of raw display_name
+      const display = getDisplayName(item);
+      const friendlyName = display.sub ? `${display.main}, ${display.sub}` : display.main;
       const lat = parseFloat(item.lat);
       const lng = parseFloat(item.lon);
 
       if (activeField === 'start') {
-        setStartQuery(name);
-        setStartDisplayText(name);
+        setStartQuery(friendlyName);
+        setStartDisplayText(friendlyName);
         setStartCoords({ lat, lng });
         setIsUsingCurrentLocation(false);
-        // Auto-focus destination after picking start
         setTimeout(() => destInputRef.current?.focus(), 150);
       } else {
-        setDestQuery(name);
+        setDestQuery(display.main);
 
         router.push({
           pathname: '/navigation',
           params: {
             destLat: lat.toString(),
             destLng: lng.toString(),
-            destName: name,
+            destName: friendlyName,
           },
         });
 
-        // Reset after navigation
         setTimeout(() => {
           collapseSearch();
         }, 300);
       }
     },
     [activeField, startCoords, router],
+  );
+
+  // --- Handle popular place quick-select ---
+  const onPickPopularPlace = useCallback(
+    (place: typeof POPULAR_PLACES[number]) => {
+      Keyboard.dismiss();
+      if (activeField === 'start') {
+        setStartQuery(place.name);
+        setStartDisplayText(place.name);
+        setStartCoords({ lat: place.lat, lng: place.lon });
+        setIsUsingCurrentLocation(false);
+        setTimeout(() => destInputRef.current?.focus(), 150);
+      } else {
+        setDestQuery(place.name);
+        router.push({
+          pathname: '/navigation',
+          params: {
+            destLat: place.lat.toString(),
+            destLng: place.lon.toString(),
+            destName: `${place.name}, Indore`,
+          },
+        });
+        setTimeout(() => collapseSearch(), 300);
+      }
+    },
+    [activeField, router],
   );
 
   const clearSearch = useCallback(() => {
@@ -514,22 +589,57 @@ export default function MapScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Search Results dropdown */}
+          {/* Search Results dropdown — Indian-style: landmark name + area */}
           {showResults && (
             <View style={styles.expandedDropdown}>
               <FlatList
                 data={results}
                 keyExtractor={(item, i) => item.place_id?.toString() ?? i.toString()}
                 keyboardShouldPersistTaps="handled"
-                renderItem={({ item }) => (
-                  <TouchableOpacity style={styles.resultRow} onPress={() => onPickResult(item)}>
-                    <MaterialIcons name="location-on" size={18} color="#00E676" />
-                    <Text style={styles.resultText} numberOfLines={2}>
-                      {item.display_name}
-                    </Text>
-                  </TouchableOpacity>
-                )}
+                renderItem={({ item }) => {
+                  const display = getDisplayName(item);
+                  return (
+                    <TouchableOpacity style={styles.resultRow} onPress={() => onPickResult(item)}>
+                      <View style={styles.resultIconWrap}>
+                        <MaterialIcons name="location-on" size={20} color="#00E676" />
+                      </View>
+                      <View style={styles.resultTextWrap}>
+                        <Text style={styles.resultMainText} numberOfLines={1}>
+                          {display.main}
+                        </Text>
+                        <Text style={styles.resultSubText} numberOfLines={1}>
+                          {display.sub}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                }}
               />
+            </View>
+          )}
+
+          {/* Popular places — shown when destination search is empty */}
+          {!showResults && !searching && activeField === 'dest' && destQuery.length < 2 && (
+            <View style={styles.popularSection}>
+              <Text style={styles.popularTitle}>Popular in Indore</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.popularScroll}
+                keyboardShouldPersistTaps="handled"
+              >
+                {POPULAR_PLACES.map((place) => (
+                  <TouchableOpacity
+                    key={place.name}
+                    style={styles.popularPill}
+                    onPress={() => onPickPopularPlace(place)}
+                    activeOpacity={0.7}
+                  >
+                    <MaterialIcons name="place" size={14} color="#00E676" />
+                    <Text style={styles.popularPillText}>{place.name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
             </View>
           )}
 
@@ -754,11 +864,67 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 13,
+    paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'rgba(255,255,255,0.06)',
   },
-  resultText: { color: '#ccc', fontSize: 14, marginLeft: 10, flex: 1 },
+  resultIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,230,118,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  resultTextWrap: {
+    flex: 1,
+  },
+  resultMainText: {
+    color: '#E0E0E0',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  resultSubText: {
+    color: '#777',
+    fontSize: 12,
+    marginTop: 2,
+  },
+
+  /* Popular places */
+  popularSection: {
+    paddingTop: 12,
+    paddingBottom: 4,
+  },
+  popularTitle: {
+    color: '#888',
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+    marginBottom: 10,
+    marginLeft: 16,
+    textTransform: 'uppercase',
+  },
+  popularScroll: {
+    paddingHorizontal: 12,
+    gap: 8,
+  },
+  popularPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,230,118,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(0,230,118,0.2)',
+    gap: 6,
+  },
+  popularPillText: {
+    color: '#ccc',
+    fontSize: 13,
+    fontWeight: '500',
+  },
 
   /* Controls */
   controls: { position: 'absolute', right: 16, gap: 12 },
