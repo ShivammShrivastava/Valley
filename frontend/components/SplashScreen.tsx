@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, Dimensions, Platform } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, Dimensions, Platform, Animated, Easing } from 'react-native';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const ICON_SIZE = SCREEN_WIDTH * 0.52;
@@ -10,12 +10,28 @@ const STROKE = ICON_SIZE * 0.048;
 const NEEDLE_LEN = GAUGE_SIZE * 0.38;
 
 export default function SplashScreen({ onFinish }: { onFinish?: () => void }) {
+  const needleAnim = useRef(new Animated.Value(0)).current;
+
   useEffect(() => {
-    if (onFinish) {
-      const t = setTimeout(onFinish, 3000);
-      return () => clearTimeout(t);
-    }
+    // Animate needle from left to right across the gauge face
+    Animated.timing(needleAnim, {
+      toValue: 1,
+      duration: 1800,
+      easing: Easing.bezier(0.22, 0.61, 0.36, 1), // Smooth ease-out
+      useNativeDriver: true,
+    }).start(() => {
+      // After sweep completes, wait briefly then transition to home
+      if (onFinish) {
+        setTimeout(onFinish, 400);
+      }
+    });
   }, []);
+
+  // Interpolate: 150deg (lower-right, start of gauge) → 340deg (upper-left, end of gauge)
+  const needleRotation = needleAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['150deg', '340deg'],
+  });
 
   return (
     <View style={styles.container}>
@@ -29,16 +45,15 @@ export default function SplashScreen({ onFinish }: { onFinish?: () => void }) {
           {/* Bottom mask to widen the gap cleanly */}
           <View style={styles.gapMask} />
 
-          {/* Needle: wrapper is 2x needle length, centered on pivot */}
-          {/* Needle View fills top half, bottom half empty → rotates around pivot */}
-          <View
+          {/* Animated needle: sweeps from left to right like a speedometer revving */}
+          <Animated.View
             style={[
               styles.needleWrapper,
-              { transform: [{ rotate: '245deg' }] },
+              { transform: [{ rotate: needleRotation }] },
             ]}
           >
             <View style={styles.needle} />
-          </View>
+          </Animated.View>
 
           {/* Pivot outer ring */}
           <View style={styles.pivotRing}>

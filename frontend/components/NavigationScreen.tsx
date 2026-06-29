@@ -229,25 +229,36 @@ export default function NavigationScreen() {
         return;
       }
 
-      // Get initial location with best accuracy for navigation
+      // Step 1: INSTANT position from cache — start route fetch immediately
+      let gotInitialPosition = false;
+      const lastKnown = await Location.getLastKnownPositionAsync();
+      if (lastKnown) {
+        const { latitude, longitude, speed, accuracy: acc } = lastKnown.coords;
+        setUserLat(latitude);
+        setUserLng(longitude);
+        const initSpeed = tracker.update(latitude, longitude, speed, acc, lastKnown.timestamp);
+        setUserSpeedKmh(initSpeed);
+        setHasLocation(true);
+        gotInitialPosition = true;
+        // Start route fetch immediately — don't wait for accurate GPS
+        loadRoute(latitude, longitude);
+      }
+
+      // Step 2: Get accurate position (faster than BestForNavigation)
       const loc = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.BestForNavigation,
+        accuracy: Location.Accuracy.High,
       });
       const { latitude, longitude, speed, accuracy: acc } = loc.coords;
       setUserLat(latitude);
       setUserLng(longitude);
-
-      // Feed initial reading into SpeedTracker
-      const initSpeed = tracker.update(
-        latitude, longitude,
-        speed, acc,
-        loc.timestamp,
-      );
+      const initSpeed = tracker.update(latitude, longitude, speed, acc, loc.timestamp);
       setUserSpeedKmh(initSpeed);
       setHasLocation(true);
 
-      // Fetch initial route
-      await loadRoute(latitude, longitude);
+      // If we didn't have a cached position, load route now
+      if (!gotInitialPosition) {
+        await loadRoute(latitude, longitude);
+      }
 
       // Watch position for live updates — optimized for vehicle navigation
       // timeInterval: 500ms = 2 readings/sec (good balance for Kalman filter)
@@ -531,10 +542,11 @@ export default function NavigationScreen() {
           }}
           showsUserLocation={true}
           showsMyLocationButton={false}
-          showsCompass={false}
+          showsCompass={true}
           toolbarEnabled={false}
           rotateEnabled={true}
           pitchEnabled={false}
+          zoomTapEnabled={false}
           loadingEnabled={true}
           loadingIndicatorColor="#7B6BA5"
           loadingBackgroundColor="#f5f5f5"

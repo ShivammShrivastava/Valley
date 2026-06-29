@@ -46,8 +46,10 @@ export default function MapScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
-  const [userLat, setUserLat] = useState(DEFAULT_LAT);
-  const [userLng, setUserLng] = useState(DEFAULT_LNG);
+  // GPS position stored in REF (not state) to avoid re-renders that interrupt
+  // map gestures like rotation, pinch-zoom, and scroll.
+  // The native `showsUserLocation` blue dot updates independently.
+  const userPosRef = useRef({ lat: DEFAULT_LAT, lng: DEFAULT_LNG });
   const [hasUserLocation, setHasUserLocation] = useState(false);
 
   // Reverse geocoded user location name
@@ -98,7 +100,7 @@ export default function MapScreen() {
     }
   }, []);
 
-  // --- GPS warm-up: start tracking early so satellite lock is ready before navigation ---
+  // --- GPS: instant centering + background warm-up (zero re-renders) ---
   const gpsWarmupRef = useRef<Location.LocationSubscription | null>(null);
 
   useEffect(() => {
@@ -108,33 +110,40 @@ export default function MapScreen() {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') return;
 
-      // Get initial position with best accuracy
+      // Step 1: INSTANT centering from cached position (no GPS wait)
+      const lastKnown = await Location.getLastKnownPositionAsync();
+      if (lastKnown) {
+        const { latitude, longitude } = lastKnown.coords;
+        userPosRef.current = { lat: latitude, lng: longitude };
+        setHasUserLocation(true);
+        setStartCoords({ lat: latitude, lng: longitude });
+        mapRef.current?.animateToRegion(
+          { latitude, longitude, latitudeDelta: 0.01, longitudeDelta: 0.01 },
+          800,
+        );
+        reverseGeocode(latitude, longitude);
+      }
+
+      // Step 2: Get accurate position (may take a few seconds)
       const loc = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.BestForNavigation,
+        accuracy: Location.Accuracy.High,
       });
       const { latitude, longitude } = loc.coords;
-      setUserLat(latitude);
-      setUserLng(longitude);
-      setHasUserLocation(true);
-      setStartCoords({ lat: latitude, lng: longitude });
+      userPosRef.current = { lat: latitude, lng: longitude };
+      if (!hasUserLocation) {
+        setHasUserLocation(true);
+        setStartCoords({ lat: latitude, lng: longitude });
+        reverseGeocode(latitude, longitude);
+      }
 
-      // Reverse geocode to get location name
-      reverseGeocode(latitude, longitude);
-
-      // Animate to user location
+      // Animate to accurate position
       mapRef.current?.animateToRegion(
-        {
-          latitude,
-          longitude,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        },
-        1500,
+        { latitude, longitude, latitudeDelta: 0.01, longitudeDelta: 0.01 },
+        1200,
       );
 
-      // Start GPS warm-up subscription — this keeps the GPS chip active
-      // so it has a full satellite lock by the time navigation starts.
-      // Uses BestForNavigation accuracy to prime the highest-quality fix.
+      // Step 3: GPS warm-up subscription — keeps GPS chip active.
+      // Updates ref only (NO setState) → zero re-renders → smooth map gestures.
       sub = await Location.watchPositionAsync(
         {
           accuracy: Location.Accuracy.BestForNavigation,
@@ -142,10 +151,12 @@ export default function MapScreen() {
           distanceInterval: 5,
         },
         (newLoc) => {
-          // Only accept readings with good accuracy (≤20m)
           if (newLoc.coords.accuracy !== null && newLoc.coords.accuracy > 20) return;
-          setUserLat(newLoc.coords.latitude);
-          setUserLng(newLoc.coords.longitude);
+          // Update ref only — no setState, no re-renders
+          userPosRef.current = {
+            lat: newLoc.coords.latitude,
+            lng: newLoc.coords.longitude,
+          };
         },
       );
       gpsWarmupRef.current = sub;
@@ -236,10 +247,6 @@ export default function MapScreen() {
       } else {
         setDestQuery(name);
 
-        // Navigate to navigation screen with start and destination
-        const originLat = startCoords?.lat ?? userLat;
-        const originLng = startCoords?.lng ?? userLng;
-
         router.push({
           pathname: '/navigation',
           params: {
@@ -255,7 +262,7 @@ export default function MapScreen() {
         }, 300);
       }
     },
-    [activeField, startCoords, userLat, userLng, router],
+    [activeField, startCoords, router],
   );
 
   const clearSearch = useCallback(() => {
@@ -269,17 +276,15 @@ export default function MapScreen() {
   const expandSearch = useCallback(() => {
     setIsExpanded(true);
     setActiveField('dest');
-    // Reset destination
     setDestQuery('');
-    // Set start to current location
     if (isUsingCurrentLocation || !startQuery) {
       setStartQuery('');
       setStartDisplayText(userLocationName);
-      setStartCoords({ lat: userLat, lng: userLng });
+      setStartCoords({ lat: userPosRef.current.lat, lng: userPosRef.current.lng });
       setIsUsingCurrentLocation(true);
     }
     setTimeout(() => destInputRef.current?.focus(), 200);
-  }, [userLocationName, userLat, userLng, isUsingCurrentLocation, startQuery]);
+  }, [userLocationName, isUsingCurrentLocation, startQuery]);
 
   const collapseSearch = useCallback(() => {
     Keyboard.dismiss();
@@ -297,35 +302,32 @@ export default function MapScreen() {
     const tempQuery = startQuery || startDisplayText;
     const tempCoords = startCoords;
 
-    // Set start to what was destination
     if (destQuery) {
       setStartQuery(destQuery);
       setStartDisplayText(destQuery);
       setIsUsingCurrentLocation(false);
-      // Note: we don't have destCoords stored separately, so we leave startCoords
     } else {
       setStartQuery('');
       setStartDisplayText(userLocationName);
       setIsUsingCurrentLocation(true);
-      setStartCoords({ lat: userLat, lng: userLng });
+      setStartCoords({ lat: userPosRef.current.lat, lng: userPosRef.current.lng });
     }
 
-    // Set destination to what was start
     setDestQuery(tempQuery);
-  }, [startQuery, startDisplayText, startCoords, destQuery, userLocationName, userLat, userLng]);
+  }, [startQuery, startDisplayText, startCoords, destQuery, userLocationName]);
 
   // --- Controls ---
   const goToMe = useCallback(() => {
     mapRef.current?.animateToRegion(
       {
-        latitude: userLat,
-        longitude: userLng,
+        latitude: userPosRef.current.lat,
+        longitude: userPosRef.current.lng,
         latitudeDelta: 0.01,
         longitudeDelta: 0.01,
       },
       1500,
     );
-  }, [userLat, userLng]);
+  }, []);
 
   const pickMapType = useCallback((t: MapType) => {
     setMapType(t);
@@ -350,12 +352,13 @@ export default function MapScreen() {
         }}
         showsUserLocation={true}
         showsMyLocationButton={false}
-        showsCompass={false}
+        showsCompass={true}
         toolbarEnabled={false}
         rotateEnabled={true}
         pitchEnabled={false}
         scrollEnabled={true}
         zoomEnabled={true}
+        zoomTapEnabled={false}
         loadingEnabled={true}
         loadingIndicatorColor="#00E676"
         loadingBackgroundColor="#0B0B0B"
