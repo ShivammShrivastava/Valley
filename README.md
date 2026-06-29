@@ -1,50 +1,70 @@
-# Welcome to your Expo app 👋
+# Suvega — Ride The Green 🟢
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A traffic light green wave prediction app that helps drivers maintain the optimal speed to hit green lights consecutively.
 
-## Get started
+## Project Structure
 
-1. Install dependencies
-
-   ```bash
-   npm install
-   ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+```
+Suvega/
+├── frontend/          ← React Native (Expo) mobile app
+├── backend/           ← Python Flask API server (reference implementation)
+├── scripts/           ← Utility & debug scripts
+├── .gitignore
+└── README.md
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+### `frontend/` — Mobile App (React Native + Expo)
 
-## Learn more
+The main mobile application built with React Native, Expo SDK 54, and Expo Router.
 
-To learn more about developing your project with Expo, look at the following resources:
+**Key features:**
+- Google Maps integration with search (Nominatim)
+- Turn-by-turn navigation with route polyline (OSRM)
+- Real-time traffic signal state prediction (on-device computation)
+- Speed advisory — tells you how fast to go to hit the next green light
+- Firestore integration for traffic signal data
+- Persistent caching for instant startup
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+```bash
+cd frontend
+npm install
+npx expo start
+```
 
-## Join the community
+### `backend/` — Flask API Server
 
-Join our community of developers creating universal apps.
+A Python Flask REST API that provides signal state and speed advisory computation. This is a standalone reference server — the mobile app currently performs all computations on-device for speed and offline capability.
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+See [backend/README.md](backend/README.md) for API documentation.
+
+```bash
+cd backend
+pip install -r requirements.txt
+python app.py
+```
+
+### `scripts/` — Utility Scripts
+
+Debug and maintenance scripts for the project:
+
+- `read-firestore.js` — Read and display all Firestore data
+- `test-firebase.js` — Quick Firebase connection test
+- `reset-project.js` — Reset to fresh Expo template (in `frontend/scripts/`)
+
+```bash
+node scripts/read-firestore.js
+node scripts/test-firebase.js
+```
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Mobile App | React Native 0.81 + Expo SDK 54 |
+| Navigation | Expo Router (file-based) |
+| Maps | react-native-maps (Google Maps) |
+| Database | Cloud Firestore |
+| Routing Engine | OSRM (OpenStreetMap) |
+| Geocoding | Nominatim (OpenStreetMap) |
+| Backend API | Python Flask |
+| Signal Computation | On-device TypeScript |

@@ -26,7 +26,7 @@
  *                    ├── green_interval, longitude, latitude, Anchor_time
  */
 
-import { db } from '../firebase';
+import { db } from '../config/firebase';
 import {
   collection,
   getDocs,
