@@ -19,6 +19,7 @@ import * as Location from 'expo-location';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { CATEGORY_CHIPS, getCategoryIcon, searchIndorePlaces, PlaceCategory } from '../services/indorePlaces';
 
 // Default: Indore, Madhya Pradesh, India
 const DEFAULT_LAT = 22.7196;
@@ -257,6 +258,7 @@ export default function MapScreen() {
   const [results, setResults] = useState<any[]>([]);
   const [showResults, setShowResults] = useState(false);
   const [searching, setSearching] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<PlaceCategory | null>(null);
   const [searchMarker, setSearchMarker] = useState<{
     lat: number;
     lng: number;
@@ -365,16 +367,23 @@ export default function MapScreen() {
   }, [isExpanded]);
 
   // --- Multi-source search: Local DB + Nominatim + Photon (parallel) ---
-  const doSearch = useCallback(async (q: string) => {
+  const doSearch = useCallback(async (q: string, categoryOverride?: PlaceCategory | null) => {
+    const effectiveCat = categoryOverride !== undefined ? categoryOverride : selectedCategory;
     if (!q.trim()) {
-      setResults([]);
-      setShowResults(false);
+      if (effectiveCat) {
+        const catResults = searchIndorePlaces('', effectiveCat);
+        setResults(catResults);
+        setShowResults(catResults.length > 0);
+      } else {
+        setResults([]);
+        setShowResults(false);
+      }
       return;
     }
     setSearching(true);
     try {
       // Source 1: LOCAL LANDMARKS (instant — no network call)
-      const localResults = searchLocalLandmarks(q);
+      const localResults = searchIndorePlaces(q, effectiveCat || undefined);
 
       // Show local results immediately while network requests are in-flight
       if (localResults.length > 0) {
@@ -442,13 +451,13 @@ export default function MapScreen() {
       setShowResults(final.length > 0);
     } catch {
       // If everything fails, at least show local results
-      const fallback = searchLocalLandmarks(q);
+      const fallback = searchIndorePlaces(q, effectiveCat || undefined);
       setResults(fallback);
       setShowResults(fallback.length > 0);
     } finally {
       setSearching(false);
     }
-  }, []);
+  }, [selectedCategory]);
 
   const onQueryChange = useCallback(
     (text: string, field: 'start' | 'dest') => {
@@ -534,6 +543,18 @@ export default function MapScreen() {
     setSearchMarker(null);
   }, []);
 
+  const onCategorySelect = useCallback((cat: PlaceCategory) => {
+    const newCat = selectedCategory === cat ? null : cat;
+    setSelectedCategory(newCat);
+    const q = activeField === 'start' ? startQuery : destQuery;
+    if (newCat || q.length >= 2) {
+      doSearch(q || '', newCat);
+    } else {
+      setResults([]);
+      setShowResults(false);
+    }
+  }, [selectedCategory, activeField, startQuery, destQuery, doSearch]);
+
   // --- Expand / Collapse ---
   const expandSearch = useCallback(() => {
     setIsExpanded(true);
@@ -557,6 +578,7 @@ export default function MapScreen() {
     setStartQuery('');
     setIsUsingCurrentLocation(true);
     setStartDisplayText(userLocationName);
+    setSelectedCategory(null);
   }, [userLocationName]);
 
   // --- Swap start and destination ---
@@ -788,7 +810,7 @@ export default function MapScreen() {
                   return (
                     <TouchableOpacity style={styles.resultRow} onPress={() => onPickResult(item)}>
                       <View style={styles.resultIconWrap}>
-                        <MaterialIcons name="location-on" size={20} color="#00E676" />
+                        <MaterialIcons name={(getCategoryIcon(item._category) || 'location-on') as any} size={20} color="#00E676" />
                       </View>
                       <View style={styles.resultTextWrap}>
                         <Text style={styles.resultMainText} numberOfLines={1}>
@@ -805,8 +827,47 @@ export default function MapScreen() {
             </View>
           )}
 
-          {/* Popular places — shown when destination search is empty */}
-          {!showResults && !searching && activeField === 'dest' && destQuery.length < 2 && (
+          {/* Category chips — quick filter buttons */}
+          {!searching && (
+            <View style={styles.categorySection}>
+              <Text style={styles.categoryTitle}>Explore Indore</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.categoryScroll}
+                keyboardShouldPersistTaps="handled"
+              >
+                {CATEGORY_CHIPS.map((chip) => (
+                  <TouchableOpacity
+                    key={chip.id}
+                    style={[
+                      styles.categoryChip,
+                      selectedCategory === chip.id && styles.categoryChipActive,
+                    ]}
+                    onPress={() => onCategorySelect(chip.id)}
+                    activeOpacity={0.7}
+                  >
+                    <MaterialIcons
+                      name={chip.icon as any}
+                      size={16}
+                      color={selectedCategory === chip.id ? '#0B0B0B' : '#00E676'}
+                    />
+                    <Text
+                      style={[
+                        styles.categoryChipText,
+                        selectedCategory === chip.id && styles.categoryChipTextActive,
+                      ]}
+                    >
+                      {chip.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
+          {/* Popular places — shown when no category selected and search is empty */}
+          {!showResults && !searching && !selectedCategory && activeField === 'dest' && destQuery.length < 2 && (
             <View style={styles.popularSection}>
               <Text style={styles.popularTitle}>Popular in Indore</Text>
               <ScrollView
@@ -1146,4 +1207,47 @@ const styles = StyleSheet.create({
   typeOptActive: { backgroundColor: 'rgba(0,230,118,0.12)' },
   typeLabel: { color: '#999', fontSize: 14 },
   typeLabelActive: { color: '#00E676', fontWeight: '600' },
+
+  /* Category chips */
+  categorySection: {
+    paddingTop: 12,
+    paddingBottom: 4,
+  },
+  categoryTitle: {
+    color: '#888',
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+    marginBottom: 10,
+    marginLeft: 16,
+    textTransform: 'uppercase' as const,
+  },
+  categoryScroll: {
+    paddingHorizontal: 12,
+    gap: 8,
+  },
+  categoryChip: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,230,118,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(0,230,118,0.18)',
+    gap: 6,
+  },
+  categoryChipActive: {
+    backgroundColor: '#00E676',
+    borderColor: '#00E676',
+  },
+  categoryChipText: {
+    color: '#ccc',
+    fontSize: 13,
+    fontWeight: '500' as const,
+  },
+  categoryChipTextActive: {
+    color: '#0B0B0B',
+    fontWeight: '700' as const,
+  },
 });
