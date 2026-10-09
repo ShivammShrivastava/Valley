@@ -3,13 +3,6 @@ const { initializeApp } = require('firebase/app');
 const { getFirestore, collection, getDocs, doc, getDoc } = require('firebase/firestore');
 
 const firebaseConfig = {
-  apiKey: 'AIzaSyCpS3vu6HSVGhmmiV5d4QV3ESLKXX1WYEA',
-  authDomain: 'valley01-f3742.firebaseapp.com',
-  projectId: 'valley01-f3742',
-  storageBucket: 'valley01-f3742.firebasestorage.app',
-  messagingSenderId: '711733237472',
-  appId: '1:711733237472:web:85cf97962b2d8ce6b1a285',
-  measurementId: 'G-WC2VF92MEP',
 };
 
 async function testFirebase() {
